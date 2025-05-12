@@ -1,0 +1,19 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Build analizador",
+        "type": "shell",
+        "command": "build.bat",
+        "group": {
+          "kind": "build",
+          "isDefault": true
+        },
+        "problemMatcher": [],
+        "windows": {
+          "command": ".\\build.bat"
+        }
+      }
+    ]
+  }
+  

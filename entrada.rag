@@ -1,0 +1,6 @@
+INICIO
+    int a
+    print("Digite o numero para calcular ")
+    STDIN('%i',a)
+    PRINT("Resultado: ",'%i',a+2)
+FIM
