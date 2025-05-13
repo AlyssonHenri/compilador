@@ -11,7 +11,7 @@ void yyerror (char *s) {
 
 typedef struct {
 	char *nome;
-	char *tipo;
+	char *tipo;=
 	union {
 		int ival;
 		char *sval;
@@ -107,7 +107,7 @@ saidas:  tipos_saida','saidas
         ;
 
 tipos_saida:  MASCARA','calcula { 
-                if(strcmp($1, "'%i'") == 0){
+                if(strcmp($1, "%i") == 0){
                     printf("%d", $3);
                 }
             }
@@ -153,7 +153,7 @@ entrada: STDIN '('MASCARA','ID')' {
                 YYABORT;
             }
 
-            if(strcmp($3, "'%i'") == 0){
+            if(strcmp($3, "%i") == 0){
                 int temp;
                 scanf("%d", &temp);
                 inserir_variavel(v->tipo, v->nome, temp, NULL);

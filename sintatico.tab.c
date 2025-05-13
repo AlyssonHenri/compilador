@@ -1272,7 +1272,7 @@ yyreduce:
   case 21: /* tipos_saida: MASCARA ',' calcula  */
 #line 109 "sintatico.y"
                                 { 
-                if(strcmp((yyvsp[-2].sval), "'%i'") == 0){
+                if(strcmp((yyvsp[-2].sval), "%i") == 0){
                     printf("%d", (yyvsp[0].ival));
                 }
             }
@@ -1353,7 +1353,7 @@ yyreduce:
                 YYABORT;
             }
 
-            if(strcmp((yyvsp[-3].sval), "'%i'") == 0){
+            if(strcmp((yyvsp[-3].sval), "%i") == 0){
                 int temp;
                 scanf("%d", &temp);
                 inserir_variavel(v->tipo, v->nome, temp, NULL);

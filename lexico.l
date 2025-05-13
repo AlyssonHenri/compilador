@@ -13,7 +13,7 @@ NUMERO [0-9]+
 
 STRING \"(\\.|[^"\\])*\"
 
-MASCARA \'%(i|s)\'
+MASCARA %(i|s)
 
 %%
 
