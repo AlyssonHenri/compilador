@@ -1,6 +1,9 @@
-INICIO
-    int a
-    print("Digite o numero para calcular ")
-    STDIN(%i,a)
-    PRINT("Resultado: ", %i,a+2)
-FIM
+NUM meuVetor[10]
+meuVetor[0] = 100
+meuVetor[1] = meuVetor[0] + 50
+PRINT(meuVetor[1])
+
+STR nomes[3]
+nomes[0] = "Alice"
+nomes[1] = "Bob"
+PRINT(nomes[0], nomes[1])

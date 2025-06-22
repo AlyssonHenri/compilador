@@ -72,45 +72,685 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
+#include <math.h> // Adicionado para fmod
 #include "uthash.h"
 
-int yylex();
-void yyerror (char *s) {
-    printf("%s\n", s);
-}
+int yylex(void);
+void yyerror(const char *s);
+extern int yylineno;
 
+// Definição dos tipos de nós da Árvore de Sintaxe Abstrata (AST)
+typedef enum {
+    AST_OP_BINARIA, AST_NUMERO, AST_TEXTO, AST_VARIAVEL,
+    AST_DECLARACAO, AST_ATRIBUICAO, AST_IMPRESSAO, AST_ENTRADA,
+    AST_IF, AST_WHILE, AST_DECLARACAO_ARRAY, AST_ACESSO_ARRAY // Tipos corrigidos
+} TipoNo;
+
+// Estrutura para um nó da AST
+typedef struct No {
+    TipoNo tipo;
+    union {
+        struct { char operador; struct No *esquerda, *direita; } op_binaria;
+        struct { double valor; } numero;
+        struct { char *valor; } texto;
+        struct { char *nome; } variavel;
+        struct { char *tipo, *nome; struct No *inicializacao; } declaracao;
+        // Estrutura de atribuicao refeita para suportar lvalues (variaveis ou acessos a array)
+        struct { struct No *target; struct No *valor; } atribuicao;
+        struct { struct ListaNos *argumentos; } impressao;
+        struct { char *mascara; char *variavel; } entrada;
+        struct { struct No *condicao; struct No *bloco_then; struct No *bloco_else; } se;
+        struct { struct No *condicao; struct No *bloco_fazer; } enquanto;
+        struct { char *tipo_base; char *nome; struct No *tamanho; } declaracao_array;
+        struct { char *nome_array; struct No *indice; } acesso_array;
+    };
+} No;
+
+// Lista encadeada para argumentos de funções ou outras listas de nós
+typedef struct ListaNos {
+    No *no;
+    struct ListaNos *proximo;
+} ListaNos;
+
+// Estrutura para a tabela de símbolos (variáveis e arrays)
 typedef struct {
-	char *nome;
-	char *tipo;
-	union {
-		int ival;
-		char *sval;
-	} valor;
-	UT_hash_handle hh;
+    char *nome;
+    char *tipo; // "NUM", "STR", "NUM_ARRAY", "STR_ARRAY"
+    union {
+        double valor_numerico;
+        char *valor_texto;
+        struct {
+            char *tipo_base; // "NUM" ou "STR"
+            int tamanho;
+            void *elementos; // Ponteiro genérico para os elementos do array
+        } array_info;
+    } valor;
+    UT_hash_handle hh; // Para a biblioteca UTHash
 } Variavel;
 
-Variavel *tabela_variaveis = NULL;
+Variavel *tabela_simbolos = NULL;
 
-void inserir_variavel(char *tipo, char *nome, int ival, char *sval) {
-	Variavel *v = malloc(sizeof(Variavel));
-	v->nome = strdup(nome);
-	v->tipo = strdup(tipo);
-	if (strcmp(tipo, "int") == 0){
-		v->valor.ival = ival;
-	}else{
-		v->valor.sval = strdup(sval);
-	}
-	HASH_ADD_KEYPTR(hh, tabela_variaveis, v->nome, strlen(v->nome), v);
+// Protótipos de funções
+void executar(No *no);
+Variavel *buscar_variavel(const char *nome);
+No *novo_op_binaria(char operador, No *esquerda, No *direita);
+No *novo_numero(double valor);
+No *novo_texto(char *texto);
+No *novo_variavel(char *nome);
+No *novo_declaracao(char *tipo, char *nome, No *inicializacao);
+No *novo_atribuicao(No *target, No *valor); // Modificado para aceitar No* target
+No *novo_impressao(ListaNos *argumentos);
+No *novo_entrada(char *mascara, char *variavel);
+No *novo_se(No *condicao, No *bloco_then, No *bloco_else);
+No *novo_enquanto(No *condicao, No *bloco_fazer);
+No *novo_declaracao_array(char *tipo_base, char *nome, No *tamanho);
+No *novo_acesso_array(char *nome_array, No *indice); // Protótipo corrigido
+ListaNos *nova_lista_nos(No *no, ListaNos *proximo);
+void inserir_variavel(char *tipo_str, char *nome, No *inicializacao);
+void inserir_array(char *tipo_base_str, char *nome, No *tamanho_no);
+double avaliar_expressao(No *no);
+void liberar_tabela_simbolos(); // Função para liberar memória da tabela de símbolos
+void liberar_ast(No *no); // Função para liberar memória da AST
+
+// Busca uma variável na tabela de símbolos
+Variavel *buscar_variavel(const char *nome) {
+    Variavel *v;
+    HASH_FIND_STR(tabela_simbolos, nome, v);
+    return v;
 }
 
-Variavel *buscar_variavel(char *nome) {
-	Variavel *v = NULL;
-	HASH_FIND_STR(tabela_variaveis, nome, v);
-	return v;
+// Cria um novo nó para operação binária
+No *novo_op_binaria(char operador, No *esquerda, No *direita) {
+    No *n = malloc(sizeof(No));
+    if (!n) { perror("Erro ao alocar novo_op_binaria"); exit(1); }
+    n->tipo = AST_OP_BINARIA;
+    n->op_binaria.operador = operador;
+    n->op_binaria.esquerda = esquerda;
+    n->op_binaria.direita = direita;
+    return n;
+}
+
+// Cria um novo nó para número
+No *novo_numero(double valor) {
+    No *n = malloc(sizeof(No));
+    if (!n) { perror("Erro ao alocar novo_numero"); exit(1); }
+    n->tipo = AST_NUMERO;
+    n->numero.valor = valor;
+    return n;
+}
+
+// Cria um novo nó para variável
+No *novo_variavel(char *nome) {
+    No *n = malloc(sizeof(No));
+    if (!n) { perror("Erro ao alocar novo_variavel"); exit(1); }
+    n->tipo = AST_VARIAVEL;
+    n->variavel.nome = strdup(nome);
+    return n;
+}
+
+// Cria um novo nó para texto (string)
+No *novo_texto(char *texto) {
+    No *n = malloc(sizeof(No));
+    if (!n) { perror("Erro ao alocar novo_texto"); exit(1); }
+    n->tipo = AST_TEXTO;
+    n->texto.valor = strdup(texto);
+    return n;
+}
+
+// Cria um novo nó para lista de nós
+ListaNos *nova_lista_nos(No *no, ListaNos *proximo) {
+    ListaNos *l = malloc(sizeof(ListaNos));
+    if (!l) { perror("Erro ao alocar nova_lista_nos"); exit(1); }
+    l->no = no;
+    l->proximo = proximo;
+    return l;
+}
+
+// Cria um novo nó para instrução de impressão (PRINT)
+No *novo_impressao(ListaNos *argumentos) {
+    No *n = malloc(sizeof(No));
+    if (!n) { perror("Erro ao alocar novo_impressao"); exit(1); }
+    n->tipo = AST_IMPRESSAO;
+    n->impressao.argumentos = argumentos;
+    return n;
+}
+
+// Cria um novo nó para declaração de variável
+No *novo_declaracao(char *tipo, char *nome, No *inicializacao) {
+    No *n = malloc(sizeof(No));
+    if (!n) { perror("Erro ao alocar novo_declaracao"); exit(1); }
+    n->tipo = AST_DECLARACAO;
+    n->declaracao.tipo = strdup(tipo);
+    n->declaracao.nome = strdup(nome);
+    n->declaracao.inicializacao = inicializacao;
+    return n;
+}
+
+// Cria um novo nó para atribuição (variável simples ou elemento de array)
+No *novo_atribuicao(No *target, No *valor) {
+    No *n = malloc(sizeof(No));
+    if (!n) { perror("Erro ao alocar novo_atribuicao"); exit(1); }
+    n->tipo = AST_ATRIBUICAO;
+    n->atribuicao.target = target;
+    n->atribuicao.valor = valor;
+    return n;
+}
+
+// Cria um novo nó para instrução de entrada (STDIN)
+No *novo_entrada(char *mascara, char *variavel) {
+    No *n = malloc(sizeof(No));
+    if (!n) { perror("Erro ao alocar novo_entrada"); exit(1); }
+    n->tipo = AST_ENTRADA;
+    n->entrada.mascara = strdup(mascara);
+    n->entrada.variavel = strdup(variavel);
+    return n;
+}
+
+// Cria um novo nó para instrução condicional (IF)
+No *novo_se(No *condicao, No *bloco_then, No *bloco_else) {
+    No *n = malloc(sizeof(No));
+    if (!n) { perror("Erro ao alocar novo_se"); exit(1); }
+    n->tipo = AST_IF;
+    n->se.condicao = condicao;
+    n->se.bloco_then = bloco_then;
+    n->se.bloco_else = bloco_else;
+    return n;
+}
+
+// Cria um novo nó para instrução de laço (WHILE)
+No *novo_enquanto(No *condicao, No *bloco_fazer) {
+    No *n = malloc(sizeof(No));
+    if (!n) { perror("Erro ao alocar novo_enquanto"); exit(1); }
+    n->tipo = AST_WHILE;
+    n->enquanto.condicao = condicao;
+    n->enquanto.bloco_fazer = bloco_fazer;
+    return n;
+}
+
+// Cria um novo nó para declaração de array
+No *novo_declaracao_array(char *tipo_base, char *nome, No *tamanho) {
+    No *n = malloc(sizeof(No));
+    if (!n) { perror("Erro ao alocar novo_declaracao_array"); exit(1); }
+    n->tipo = AST_DECLARACAO_ARRAY;
+    n->declaracao_array.tipo_base = strdup(tipo_base);
+    n->declaracao_array.nome = strdup(nome);
+    n->declaracao_array.tamanho = tamanho;
+    return n;
+}
+
+// Cria um novo nó para acesso a elemento de array
+No *novo_acesso_array(char *nome_array, No *indice) {
+    No *n = malloc(sizeof(No));
+    if (!n) { perror("Erro ao alocar novo_acesso_array"); exit(1); }
+    n->tipo = AST_ACESSO_ARRAY;
+    n->acesso_array.nome_array = strdup(nome_array);
+    n->acesso_array.indice = indice;
+    return n;
+}
+
+// Insere uma variável simples na tabela de símbolos
+void inserir_variavel(char *tipo_str, char *nome, No *inicializacao) {
+    if (buscar_variavel(nome)) {
+        fprintf(stderr, "Erro semântico na linha %d: Variável '%s' já declarada.\n", yylineno, nome);
+        return;
+    }
+
+    Variavel *v = malloc(sizeof(Variavel));
+    if (!v) { perror("Erro ao alocar Variavel"); exit(1); }
+    v->nome = strdup(nome);
+    v->tipo = strdup(tipo_str);
+
+    if (strcmp(tipo_str, "NUM") == 0) {
+        v->valor.valor_numerico = 0;
+        if (inicializacao) {
+            // Não executar inicializacao aqui, apenas avaliar_expressao se for uma expressão
+            // A execução da inicialização deve acontecer no momento da execução do nó de declaração
+            double val = avaliar_expressao(inicializacao);
+            v->valor.valor_numerico = val;
+        }
+    } else if (strcmp(tipo_str, "STR") == 0) {
+        v->valor.valor_texto = strdup("");
+        if (inicializacao) {
+            if (inicializacao->tipo == AST_TEXTO) {
+                free(v->valor.valor_texto);
+                v->valor.valor_texto = strdup(inicializacao->texto.valor);
+            } else if (inicializacao->tipo == AST_VARIAVEL) {
+                Variavel *orig_var = buscar_variavel(inicializacao->variavel.nome);
+                if (orig_var && strcmp(orig_var->tipo, "STR") == 0) {
+                    free(v->valor.valor_texto);
+                    v->valor.valor_texto = strdup(orig_var->valor.valor_texto);
+                } else {
+                    fprintf(stderr, "Erro semântico na linha %d: Inicialização de STR com tipo incompatível.\n", yylineno);
+                }
+            } else {
+                fprintf(stderr, "Erro semântico na linha %d: Inicialização incompatível para o tipo STR.\n", yylineno);
+            }
+        }
+    }
+    HASH_ADD_KEYPTR(hh, tabela_simbolos, v->nome, strlen(v->nome), v);
+}
+
+// Insere um array na tabela de símbolos e aloca sua memória
+void inserir_array(char *tipo_base_str, char *nome, No *tamanho_no) {
+    if (buscar_variavel(nome)) {
+        fprintf(stderr, "Erro semântico na linha %d: Array '%s' já declarado.\n", yylineno, nome);
+        return;
+    }
+
+    double tamanho_val = avaliar_expressao(tamanho_no);
+    if (tamanho_val <= 0 || fmod(tamanho_val, 1.0) != 0) {
+        fprintf(stderr, "Erro semântico na linha %d: Tamanho de array inválido para '%s'. Deve ser um inteiro positivo.\n", yylineno, nome);
+        return;
+    }
+    int tamanho = (int)tamanho_val;
+
+    Variavel *v = malloc(sizeof(Variavel));
+    if (!v) { perror("Erro ao alocar Variavel para array"); exit(1); }
+    v->nome = strdup(nome);
+    v->tipo = (strcmp(tipo_base_str, "NUM") == 0) ? strdup("NUM_ARRAY") : strdup("STR_ARRAY");
+    v->valor.array_info.tipo_base = strdup(tipo_base_str);
+    v->valor.array_info.tamanho = tamanho;
+
+    if (strcmp(tipo_base_str, "NUM") == 0) {
+        v->valor.array_info.elementos = calloc(tamanho, sizeof(double));
+        if (!v->valor.array_info.elementos) { perror("Erro ao alocar elementos NUM_ARRAY"); exit(1); }
+    } else if (strcmp(tipo_base_str, "STR") == 0) {
+        v->valor.array_info.elementos = calloc(tamanho, sizeof(char *));
+        if (!v->valor.array_info.elementos) { perror("Erro ao alocar elementos STR_ARRAY"); exit(1); }
+        // Inicializar cada ponteiro de string para uma string vazia
+        for (int i = 0; i < tamanho; i++) {
+            ((char **)v->valor.array_info.elementos)[i] = strdup("");
+            if (!((char **)v->valor.array_info.elementos)[i]) { perror("Erro ao alocar string vazia no array"); exit(1); }
+        }
+    } else {
+        fprintf(stderr, "Erro semântico na linha %d: Tipo base de array '%s' não suportado. Use 'NUM' ou 'STR'.\n", yylineno, tipo_base_str);
+        free(v->nome); free(v->tipo); free(v->valor.array_info.tipo_base); free(v);
+        return;
+    }
+
+    HASH_ADD_KEYPTR(hh, tabela_simbolos, v->nome, strlen(v->nome), v);
+}
+
+// Avalia o valor de uma expressão
+double avaliar_expressao(No *no) {
+    if (!no) return 0; // Ou lance um erro, dependendo da semântica
+
+    switch (no->tipo) {
+        case AST_NUMERO: {
+            return no->numero.valor;
+        }
+        case AST_VARIAVEL: {
+            Variavel *v = buscar_variavel(no->variavel.nome);
+            if (!v) {
+                fprintf(stderr, "Erro em tempo de execução na linha %d: Variável '%s' não declarada.\n", yylineno, no->variavel.nome);
+                return 0; // Ou lance um erro
+            }
+            if (strcmp(v->tipo, "NUM") == 0) {
+                return v->valor.valor_numerico;
+            } else {
+                fprintf(stderr, "Erro em tempo de execução na linha %d: Tentativa de usar variável de tipo '%s' em expressão numérica.\n", yylineno, v->tipo);
+                return 0; // Ou lance um erro
+            }
+        }
+        case AST_OP_BINARIA: {
+            double esq = avaliar_expressao(no->op_binaria.esquerda);
+            double dir = avaliar_expressao(no->op_binaria.direita);
+
+            switch (no->op_binaria.operador) {
+                case '+': return esq + dir;
+                case '-': return esq - dir;
+                case '*': return esq * dir;
+                case '/': return (dir != 0) ? esq / dir : (fprintf(stderr, "Erro em tempo de execução na linha %d: Divisão por zero.\n", yylineno), 0);
+                case '<': return (esq < dir) ? 1 : 0;
+                case '>': return (esq > dir) ? 1 : 0;
+                case 'L': return (esq <= dir) ? 1 : 0; // 'L' para <= (ME)
+                case 'A': return (esq >= dir) ? 1 : 0; // 'A' para >= (MA)
+                case 'E': return (esq == dir) ? 1 : 0; // 'E' para == (IG)
+                case 'D': return (esq != dir) ? 1 : 0; // 'D' para != (DI)
+                default:
+                    fprintf(stderr, "Erro em tempo de execução na linha %d: Operador binário desconhecido '%c'.\n", yylineno, no->op_binaria.operador);
+                    return 0;
+            }
+        }
+        case AST_ACESSO_ARRAY: {
+            Variavel *array_var = buscar_variavel(no->acesso_array.nome_array);
+            if (!array_var) {
+                fprintf(stderr, "Erro em tempo de execução na linha %d: Array '%s' não declarado.\n", yylineno, no->acesso_array.nome_array);
+                return 0;
+            }
+            if (strcmp(array_var->tipo, "NUM_ARRAY") != 0 && strcmp(array_var->tipo, "STR_ARRAY") != 0) {
+                 fprintf(stderr, "Erro em tempo de execução na linha %d: Variável '%s' não é um array.\n", yylineno, no->acesso_array.nome_array);
+                 return 0;
+            }
+
+            double indice_val = avaliar_expressao(no->acesso_array.indice);
+            if (indice_val < 0 || fmod(indice_val, 1.0) != 0 || indice_val >= array_var->valor.array_info.tamanho) {
+                fprintf(stderr, "Erro em tempo de execução na linha %d: Índice de array fora dos limites para '%s'. Índice: %.0f, Tamanho: %d.\n", yylineno, array_var->nome, indice_val, array_var->valor.array_info.tamanho);
+                return 0;
+            }
+            int indice = (int)indice_val;
+
+            if (strcmp(array_var->valor.array_info.tipo_base, "NUM") == 0) {
+                return ((double *)array_var->valor.array_info.elementos)[indice];
+            } else if (strcmp(array_var->valor.array_info.tipo_base, "STR") == 0) {
+                fprintf(stderr, "Erro em tempo de execução na linha %d: Tentativa de usar elemento de array de strings em expressão numérica.\n", yylineno);
+                return 0;
+            }
+            break;
+        }
+
+        default:
+            fprintf(stderr, "Erro em tempo de execução na linha %d: Tipo de nó inválido em expressão: %d.\n", yylineno, no->tipo);
+            return 0;
+    }
+    return 0; // Retorno padrão, embora todos os cases deveriam ter um retorno
+}
+
+// Executa o nó da AST
+void executar(No *no) {
+    if (!no) return;
+
+    // Concatenação de instruções (bloco de código)
+    if (no->tipo == AST_OP_BINARIA && no->op_binaria.operador == ';') {
+        executar(no->op_binaria.esquerda);
+        executar(no->op_binaria.direita);
+        return;
+    }
+
+    switch (no->tipo) {
+        case AST_DECLARACAO: {
+            inserir_variavel(no->declaracao.tipo, no->declaracao.nome, no->declaracao.inicializacao);
+            break;
+        }
+        case AST_DECLARACAO_ARRAY: {
+            inserir_array(no->declaracao_array.tipo_base, no->declaracao_array.nome, no->declaracao_array.tamanho);
+            break;
+        }
+        case AST_ATRIBUICAO: {
+            if (no->atribuicao.target->tipo == AST_VARIAVEL) {
+                Variavel *v = buscar_variavel(no->atribuicao.target->variavel.nome);
+                if (!v) {
+                    fprintf(stderr, "Erro em tempo de execução na linha %d: Variável '%s' não declarada.\n", yylineno, no->atribuicao.target->variavel.nome);
+                    return;
+                }
+
+                if (strcmp(v->tipo, "NUM") == 0) {
+                    v->valor.valor_numerico = avaliar_expressao(no->atribuicao.valor);
+                } else if (strcmp(v->tipo, "STR") == 0) {
+                    if (no->atribuicao.valor->tipo == AST_TEXTO) {
+                        free(v->valor.valor_texto);
+                        v->valor.valor_texto = strdup(no->atribuicao.valor->texto.valor);
+                    } else if (no->atribuicao.valor->tipo == AST_VARIAVEL) {
+                        Variavel *orig_var = buscar_variavel(no->atribuicao.valor->variavel.nome);
+                        if (orig_var && strcmp(orig_var->tipo, "STR") == 0) {
+                            free(v->valor.valor_texto);
+                            v->valor.valor_texto = strdup(orig_var->valor.valor_texto);
+                        } else {
+                            fprintf(stderr, "Erro em tempo de execução na linha %d: Atribuição de tipo incompatível para STR.\n", yylineno);
+                        }
+                    } else {
+                        fprintf(stderr, "Erro em tempo de execução na linha %d: Atribuição de tipo incompatível para STR.\n", yylineno);
+                    }
+                } else {
+                    fprintf(stderr, "Erro em tempo de execução na linha %d: Variável '%s' é um array, use acesso com índice.\n", yylineno, v->nome);
+                }
+            } else if (no->atribuicao.target->tipo == AST_ACESSO_ARRAY) {
+                char *array_name = no->atribuicao.target->acesso_array.nome_array;
+                No *indice_node = no->atribuicao.target->acesso_array.indice;
+
+                Variavel *array_var = buscar_variavel(array_name);
+                if (!array_var) {
+                    fprintf(stderr, "Erro em tempo de execução na linha %d: Array '%s' não declarado.\n", yylineno, array_name);
+                    return;
+                }
+                if (strcmp(array_var->tipo, "NUM_ARRAY") != 0 && strcmp(array_var->tipo, "STR_ARRAY") != 0) {
+                    fprintf(stderr, "Erro em tempo de execução na linha %d: '%s' não é um array.\n", yylineno, array_name);
+                    return;
+                }
+
+                double indice_val = avaliar_expressao(indice_node);
+                if (indice_val < 0 || fmod(indice_val, 1.0) != 0 || indice_val >= array_var->valor.array_info.tamanho) {
+                    fprintf(stderr, "Erro em tempo de execução na linha %d: Índice de array fora dos limites para '%s'. Índice: %.0f, Tamanho: %d.\n", yylineno, array_var->nome, indice_val, array_var->valor.array_info.tamanho);
+                    return;
+                }
+                int indice = (int)indice_val;
+
+                if (strcmp(array_var->valor.array_info.tipo_base, "NUM") == 0) {
+                    double valor_atribuicao = avaliar_expressao(no->atribuicao.valor);
+                    ((double *)array_var->valor.array_info.elementos)[indice] = valor_atribuicao;
+                } else if (strcmp(array_var->valor.array_info.tipo_base, "STR") == 0) {
+                    if (no->atribuicao.valor->tipo == AST_TEXTO) {
+                        free(((char **)array_var->valor.array_info.elementos)[indice]);
+                        ((char **)array_var->valor.array_info.elementos)[indice] = strdup(no->atribuicao.valor->texto.valor);
+                    } else if (no->atribuicao.valor->tipo == AST_VARIAVEL) {
+                         Variavel *orig_var = buscar_variavel(no->atribuicao.valor->variavel.nome);
+                         if (orig_var && strcmp(orig_var->tipo, "STR") == 0) {
+                             free(((char **)array_var->valor.array_info.elementos)[indice]);
+                             ((char **)array_var->valor.array_info.elementos)[indice] = strdup(orig_var->valor.valor_texto);
+                         } else {
+                             fprintf(stderr, "Erro em tempo de execução na linha %d: Atribuição de tipo incompatível para array de strings.\n", yylineno);
+                         }
+                    } else {
+                        fprintf(stderr, "Erro em tempo de execução na linha %d: Atribuição de tipo incompatível para array de strings.\n", yylineno);
+                    }
+                }
+            } else {
+                fprintf(stderr, "Erro interno em tempo de execução na linha %d: Tipo de target de atribuição desconhecido: %d.\n", yylineno, no->atribuicao.target->tipo);
+            }
+            break;
+        }
+        case AST_IMPRESSAO: {
+            ListaNos *arg = no->impressao.argumentos;
+            while (arg) {
+                if (arg->no->tipo == AST_VARIAVEL) {
+                    Variavel *v = buscar_variavel(arg->no->variavel.nome);
+                    if (v) {
+                        if (strcmp(v->tipo, "NUM") == 0) {
+                            printf("%.0f", v->valor.valor_numerico);
+                        } else if (strcmp(v->tipo, "STR") == 0) {
+                            printf("%s", v->valor.valor_texto);
+                        } else {
+                             fprintf(stderr, "Erro em tempo de execução na linha %d: Tentativa de imprimir array sem índice: '%s'.\n", yylineno, v->nome);
+                        }
+                    } else {
+                         fprintf(stderr, "Erro em tempo de execução na linha %d: Variável '%s' não declarada para impressão.\n", yylineno, arg->no->variavel.nome);
+                    }
+                } else if (arg->no->tipo == AST_NUMERO) {
+                    printf("%.0f", arg->no->numero.valor);
+                } else if (arg->no->tipo == AST_TEXTO) {
+                    printf("%s", arg->no->texto.valor);
+                } else if (arg->no->tipo == AST_OP_BINARIA) {
+                    printf("%.0f", avaliar_expressao(arg->no));
+                } else if (arg->no->tipo == AST_ACESSO_ARRAY) { // Impressão de elemento de array
+                    Variavel *array_var = buscar_variavel(arg->no->acesso_array.nome_array);
+                    if (!array_var) {
+                        fprintf(stderr, "Erro em tempo de execução na linha %d: Array '%s' não declarado para impressão.\n", yylineno, arg->no->acesso_array.nome_array);
+                        arg = arg->proximo; // Pula para o próximo argumento para não travar
+                        continue;
+                    }
+                    double indice_val = avaliar_expressao(arg->no->acesso_array.indice);
+                    if (indice_val < 0 || fmod(indice_val, 1.0) != 0 || indice_val >= array_var->valor.array_info.tamanho) {
+                        fprintf(stderr, "Erro em tempo de execução na linha %d: Índice de array fora dos limites para impressão de '%s'.\n", yylineno, array_var->nome);
+                        arg = arg->proximo; // Pula para o próximo argumento
+                        continue;
+                    }
+                    int indice = (int)indice_val;
+
+                    if (strcmp(array_var->valor.array_info.tipo_base, "NUM") == 0) {
+                        printf("%.0f", ((double *)array_var->valor.array_info.elementos)[indice]);
+                    } else if (strcmp(array_var->valor.array_info.tipo_base, "STR") == 0) {
+                        printf("%s", ((char **)array_var->valor.array_info.elementos)[indice]);
+                    }
+                }
+                arg = arg->proximo;
+                if (arg) printf(" ");
+            }
+            printf("\n");
+            break;
+        }
+        case AST_ENTRADA: {
+            Variavel *v = buscar_variavel(no->entrada.variavel);
+            if (!v) {
+                fprintf(stderr, "Erro em tempo de execução na linha %d: Variável '%s' não declarada.\n", yylineno, no->entrada.variavel);
+                return;
+            }
+            // A entrada só suporta variáveis simples, não elementos de array diretamente
+            if (strcmp(v->tipo, "NUM") == 0) {
+                if (strcmp(no->entrada.mascara, "%i") == 0 || strcmp(no->entrada.mascara, "%d") == 0) {
+                    int valor;
+                    if (scanf("%d", &valor) == 1) {
+                        v->valor.valor_numerico = (double)valor;
+                    } else {
+                         fprintf(stderr, "Erro em tempo de execução na linha %d: Falha na leitura de inteiro.\n", yylineno);
+                    }
+                } else if (strcmp(no->entrada.mascara, "%f") == 0) {
+                    double valor;
+                    if (scanf("%lf", &valor) == 1) {
+                        v->valor.valor_numerico = valor;
+                    } else {
+                         fprintf(stderr, "Erro em tempo de execução na linha %d: Falha na leitura de float.\n", yylineno);
+                    }
+                } else {
+                    fprintf(stderr, "Erro em tempo de execução na linha %d: Máscara de formato '%s' incompatível com tipo NUM para entrada.\n", yylineno, no->entrada.mascara);
+                }
+            } else if (strcmp(v->tipo, "STR") == 0) {
+                if (strcmp(no->entrada.mascara, "%s") == 0) {
+                    char buffer[256]; // Buffer para leitura de string
+                    if (scanf("%255s", buffer) == 1) {
+                        free(v->valor.valor_texto);
+                        v->valor.valor_texto = strdup(buffer);
+                    } else {
+                        fprintf(stderr, "Erro em tempo de execução na linha %d: Falha na leitura de string.\n", yylineno);
+                    }
+                } else {
+                    fprintf(stderr, "Erro em tempo de execução na linha %d: Máscara de formato '%s' incompatível com tipo STR para entrada.\n", yylineno, no->entrada.mascara);
+                }
+            } else {
+                fprintf(stderr, "Erro em tempo de execução na linha %d: STDIN não suporta variáveis do tipo '%s'.\n", yylineno, v->tipo);
+            }
+            // Limpa o buffer de entrada para evitar problemas com leituras futuras
+            int c; while ((c = getchar()) != '\n' && c != EOF);
+            break;
+        }
+        case AST_IF: {
+            double condicao_resultado = avaliar_expressao(no->se.condicao);
+            if (condicao_resultado != 0) {
+                executar(no->se.bloco_then);
+            } else if (no->se.bloco_else) {
+                executar(no->se.bloco_else);
+            }
+            break;
+        }
+        case AST_WHILE: {
+            while (avaliar_expressao(no->enquanto.condicao) != 0) {
+                executar(no->enquanto.bloco_fazer);
+            }
+            break;
+        }
+        case AST_NUMERO:
+        case AST_TEXTO:
+        case AST_VARIAVEL:
+        case AST_OP_BINARIA:
+        case AST_ACESSO_ARRAY: // Estes são avaliados por 'avaliar_expressao', não executados diretamente
+            break;
+
+        default:
+            fprintf(stderr, "Erro em tempo de execução na linha %d: Tipo de nó não implementado para execução direta: %d.\n", yylineno, no->tipo);
+            break;
+    }
+}
+
+// Libera a memória da tabela de símbolos
+void liberar_tabela_simbolos() {
+    Variavel *current_var, *tmp;
+    HASH_ITER(hh, tabela_simbolos, current_var, tmp) {
+        HASH_DEL(tabela_simbolos, current_var);
+        free(current_var->nome);
+        free(current_var->tipo);
+        if (strcmp(current_var->tipo, "STR") == 0) {
+            free(current_var->valor.valor_texto);
+        } else if (strcmp(current_var->tipo, "NUM_ARRAY") == 0 || strcmp(current_var->tipo, "STR_ARRAY") == 0) {
+            if (strcmp(current_var->valor.array_info.tipo_base, "STR") == 0) {
+                // Liberar cada string individualmente se for um array de strings
+                char **str_array = (char **)current_var->valor.array_info.elementos;
+                for (int i = 0; i < current_var->valor.array_info.tamanho; i++) {
+                    free(str_array[i]);
+                }
+            }
+            free(current_var->valor.array_info.tipo_base);
+            free(current_var->valor.array_info.elementos);
+        }
+        free(current_var);
+    }
+}
+
+// Libera a memória da AST recursivamente
+void liberar_ast(No *no) {
+    if (!no) return;
+
+    // Liberar nós filhos primeiro
+    switch (no->tipo) {
+        case AST_OP_BINARIA:
+            liberar_ast(no->op_binaria.esquerda);
+            liberar_ast(no->op_binaria.direita);
+            break;
+        case AST_DECLARACAO:
+            free(no->declaracao.tipo);
+            free(no->declaracao.nome);
+            liberar_ast(no->declaracao.inicializacao);
+            break;
+        case AST_ATRIBUICAO:
+            liberar_ast(no->atribuicao.target);
+            liberar_ast(no->atribuicao.valor);
+            break;
+        case AST_IMPRESSAO: {
+            ListaNos *arg = no->impressao.argumentos;
+            while (arg) {
+                ListaNos *temp = arg;
+                liberar_ast(arg->no);
+                arg = arg->proximo;
+                free(temp);
+            }
+            break;
+        }
+        case AST_ENTRADA:
+            free(no->entrada.mascara);
+            free(no->entrada.variavel);
+            break;
+        case AST_IF:
+            liberar_ast(no->se.condicao);
+            liberar_ast(no->se.bloco_then);
+            liberar_ast(no->se.bloco_else);
+            break;
+        case AST_WHILE:
+            liberar_ast(no->enquanto.condicao);
+            liberar_ast(no->enquanto.bloco_fazer);
+            break;
+        case AST_DECLARACAO_ARRAY:
+            free(no->declaracao_array.tipo_base);
+            free(no->declaracao_array.nome);
+            liberar_ast(no->declaracao_array.tamanho);
+            break;
+        case AST_ACESSO_ARRAY:
+            free(no->acesso_array.nome_array);
+            liberar_ast(no->acesso_array.indice);
+            break;
+        case AST_TEXTO:
+            free(no->texto.valor);
+            break;
+        case AST_VARIAVEL:
+            free(no->variavel.nome);
+            break;
+        case AST_NUMERO:
+            // Nada a liberar
+            break;
+    }
+    free(no);
 }
 
 
-#line 114 "sintatico.tab.c"
+#line 754 "sintatico.tab.c"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -155,11 +795,18 @@ extern int yydebug;
     INICIO = 259,                  /* INICIO  */
     PRINT = 260,                   /* PRINT  */
     STDIN = 261,                   /* STDIN  */
-    TIPO = 262,                    /* TIPO  */
-    NUMERO = 263,                  /* NUMERO  */
-    ID = 264,                      /* ID  */
-    STRING = 265,                  /* STRING  */
-    MASCARA = 266                  /* MASCARA  */
+    IF = 262,                      /* IF  */
+    ELSE = 263,                    /* ELSE  */
+    WHILE = 264,                   /* WHILE  */
+    TIPO = 265,                    /* TIPO  */
+    VAR = 266,                     /* VAR  */
+    STRING = 267,                  /* STRING  */
+    MASCARA = 268,                 /* MASCARA  */
+    NUMERO = 269,                  /* NUMERO  */
+    ME = 270,                      /* ME  */
+    MA = 271,                      /* MA  */
+    IG = 272,                      /* IG  */
+    DI = 273                       /* DI  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -168,12 +815,14 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 44 "sintatico.y"
+#line 684 "sintatico.y"
 
-    int ival;
-    char *sval;
+    double valor_numerico;
+    char *valor_texto;
+    No *no;
+    ListaNos *lista_nos;
 
-#line 177 "sintatico.tab.c"
+#line 826 "sintatico.tab.c"
 
 };
 typedef union YYSTYPE YYSTYPE;
@@ -200,31 +849,48 @@ enum yysymbol_kind_t
   YYSYMBOL_INICIO = 4,                     /* INICIO  */
   YYSYMBOL_PRINT = 5,                      /* PRINT  */
   YYSYMBOL_STDIN = 6,                      /* STDIN  */
-  YYSYMBOL_TIPO = 7,                       /* TIPO  */
-  YYSYMBOL_NUMERO = 8,                     /* NUMERO  */
-  YYSYMBOL_ID = 9,                         /* ID  */
-  YYSYMBOL_STRING = 10,                    /* STRING  */
-  YYSYMBOL_MASCARA = 11,                   /* MASCARA  */
-  YYSYMBOL_12_ = 12,                       /* '+'  */
-  YYSYMBOL_13_ = 13,                       /* '-'  */
-  YYSYMBOL_14_ = 14,                       /* '*'  */
-  YYSYMBOL_15_ = 15,                       /* '/'  */
-  YYSYMBOL_16_ = 16,                       /* '('  */
-  YYSYMBOL_17_ = 17,                       /* ')'  */
-  YYSYMBOL_18_ = 18,                       /* ','  */
-  YYSYMBOL_19_ = 19,                       /* '='  */
-  YYSYMBOL_YYACCEPT = 20,                  /* $accept  */
-  YYSYMBOL_val = 21,                       /* val  */
-  YYSYMBOL_cod = 22,                       /* cod  */
-  YYSYMBOL_instrucao = 23,                 /* instrucao  */
-  YYSYMBOL_calcula = 24,                   /* calcula  */
-  YYSYMBOL_valor = 25,                     /* valor  */
-  YYSYMBOL_escreve = 26,                   /* escreve  */
-  YYSYMBOL_saidas = 27,                    /* saidas  */
-  YYSYMBOL_tipos_saida = 28,               /* tipos_saida  */
-  YYSYMBOL_declara = 29,                   /* declara  */
-  YYSYMBOL_atribui = 30,                   /* atribui  */
-  YYSYMBOL_entrada = 31                    /* entrada  */
+  YYSYMBOL_IF = 7,                         /* IF  */
+  YYSYMBOL_ELSE = 8,                       /* ELSE  */
+  YYSYMBOL_WHILE = 9,                      /* WHILE  */
+  YYSYMBOL_TIPO = 10,                      /* TIPO  */
+  YYSYMBOL_VAR = 11,                       /* VAR  */
+  YYSYMBOL_STRING = 12,                    /* STRING  */
+  YYSYMBOL_MASCARA = 13,                   /* MASCARA  */
+  YYSYMBOL_NUMERO = 14,                    /* NUMERO  */
+  YYSYMBOL_ME = 15,                        /* ME  */
+  YYSYMBOL_MA = 16,                        /* MA  */
+  YYSYMBOL_IG = 17,                        /* IG  */
+  YYSYMBOL_DI = 18,                        /* DI  */
+  YYSYMBOL_19_ = 19,                       /* '['  */
+  YYSYMBOL_20_ = 20,                       /* ']'  */
+  YYSYMBOL_21_ = 21,                       /* '<'  */
+  YYSYMBOL_22_ = 22,                       /* '>'  */
+  YYSYMBOL_23_ = 23,                       /* '+'  */
+  YYSYMBOL_24_ = 24,                       /* '-'  */
+  YYSYMBOL_25_ = 25,                       /* '*'  */
+  YYSYMBOL_26_ = 26,                       /* '/'  */
+  YYSYMBOL_27_ = 27,                       /* '('  */
+  YYSYMBOL_28_ = 28,                       /* ')'  */
+  YYSYMBOL_29_ = 29,                       /* '{'  */
+  YYSYMBOL_30_ = 30,                       /* '}'  */
+  YYSYMBOL_31_ = 31,                       /* ','  */
+  YYSYMBOL_32_ = 32,                       /* '='  */
+  YYSYMBOL_YYACCEPT = 33,                  /* $accept  */
+  YYSYMBOL_programa = 34,                  /* programa  */
+  YYSYMBOL_bloco = 35,                     /* bloco  */
+  YYSYMBOL_instrucao = 36,                 /* instrucao  */
+  YYSYMBOL_if_instrucao = 37,              /* if_instrucao  */
+  YYSYMBOL_while_instrucao = 38,           /* while_instrucao  */
+  YYSYMBOL_condicao = 39,                  /* condicao  */
+  YYSYMBOL_calcula = 40,                   /* calcula  */
+  YYSYMBOL_valor = 41,                     /* valor  */
+  YYSYMBOL_escreve = 42,                   /* escreve  */
+  YYSYMBOL_argumentos = 43,                /* argumentos  */
+  YYSYMBOL_declaracao = 44,                /* declaracao  */
+  YYSYMBOL_lvalue = 45,                    /* lvalue  */
+  YYSYMBOL_atribuicao = 46,                /* atribuicao  */
+  YYSYMBOL_entrada = 47,                   /* entrada  */
+  YYSYMBOL_acesso_array = 48               /* acesso_array  */
 };
 typedef enum yysymbol_kind_t yysymbol_kind_t;
 
@@ -550,21 +1216,21 @@ union yyalloc
 #endif /* !YYCOPY_NEEDED */
 
 /* YYFINAL -- State number of the termination state.  */
-#define YYFINAL  17
+#define YYFINAL  3
 /* YYLAST -- Last index in YYTABLE.  */
-#define YYLAST   50
+#define YYLAST   127
 
 /* YYNTOKENS -- Number of terminals.  */
-#define YYNTOKENS  20
+#define YYNTOKENS  33
 /* YYNNTS -- Number of nonterminals.  */
-#define YYNNTS  12
+#define YYNNTS  16
 /* YYNRULES -- Number of rules.  */
-#define YYNRULES  29
+#define YYNRULES  41
 /* YYNSTATES -- Number of states.  */
-#define YYNSTATES  54
+#define YYNSTATES  87
 
 /* YYMAXUTOK -- Last valid token kind.  */
-#define YYMAXUTOK   266
+#define YYMAXUTOK   273
 
 
 /* YYTRANSLATE(TOKEN-NUM) -- Symbol number corresponding to TOKEN-NUM
@@ -582,15 +1248,15 @@ static const yytype_int8 yytranslate[] =
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-      16,    17,    14,    12,    18,    13,     2,    15,     2,     2,
+      27,    28,    25,    23,    31,    24,     2,    26,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-       2,    19,     2,     2,     2,     2,     2,     2,     2,     2,
-       2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-       2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
+      21,    32,    22,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
+       2,    19,     2,    20,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
+       2,     2,     2,    29,     2,    30,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
@@ -604,16 +1270,19 @@ static const yytype_int8 yytranslate[] =
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     1,     2,     3,     4,
-       5,     6,     7,     8,     9,    10,    11
+       5,     6,     7,     8,     9,    10,    11,    12,    13,    14,
+      15,    16,    17,    18
 };
 
 #if YYDEBUG
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
-static const yytype_uint8 yyrline[] =
+static const yytype_int16 yyrline[] =
 {
-       0,    66,    66,    69,    70,    73,    74,    75,    76,    77,
-      80,    81,    82,    83,    84,    85,    88,    89,   103,   105,
-     106,   109,   114,   126,   129,   132,   135,   140,   144,   149
+       0,   710,   710,   713,   714,   717,   718,   719,   720,   721,
+     722,   723,   726,   727,   730,   733,   734,   735,   736,   737,
+     738,   741,   742,   743,   744,   745,   746,   749,   750,   751,
+     752,   755,   758,   759,   763,   764,   765,   769,   770,   774,
+     777,   781
 };
 #endif
 
@@ -630,10 +1299,13 @@ static const char *yysymbol_name (yysymbol_kind_t yysymbol) YY_ATTRIBUTE_UNUSED;
 static const char *const yytname[] =
 {
   "\"end of file\"", "error", "\"invalid token\"", "FIM", "INICIO",
-  "PRINT", "STDIN", "TIPO", "NUMERO", "ID", "STRING", "MASCARA", "'+'",
-  "'-'", "'*'", "'/'", "'('", "')'", "','", "'='", "$accept", "val", "cod",
-  "instrucao", "calcula", "valor", "escreve", "saidas", "tipos_saida",
-  "declara", "atribui", "entrada", YY_NULLPTR
+  "PRINT", "STDIN", "IF", "ELSE", "WHILE", "TIPO", "VAR", "STRING",
+  "MASCARA", "NUMERO", "ME", "MA", "IG", "DI", "'['", "']'", "'<'", "'>'",
+  "'+'", "'-'", "'*'", "'/'", "'('", "')'", "'{'", "'}'", "','", "'='",
+  "$accept", "programa", "bloco", "instrucao", "if_instrucao",
+  "while_instrucao", "condicao", "calcula", "valor", "escreve",
+  "argumentos", "declaracao", "lvalue", "atribuicao", "entrada",
+  "acesso_array", YY_NULLPTR
 };
 
 static const char *
@@ -643,12 +1315,12 @@ yysymbol_name (yysymbol_kind_t yysymbol)
 }
 #endif
 
-#define YYPACT_NINF (-9)
+#define YYPACT_NINF (-23)
 
 #define yypact_value_is_default(Yyn) \
   ((Yyn) == YYPACT_NINF)
 
-#define YYTABLE_NINF (-1)
+#define YYTABLE_NINF (-39)
 
 #define yytable_value_is_error(Yyn) \
   0
@@ -657,12 +1329,15 @@ yysymbol_name (yysymbol_kind_t yysymbol)
    STATE-NUM.  */
 static const yytype_int8 yypact[] =
 {
-      18,    -4,    32,    17,    19,    25,    -9,    21,     7,    34,
-      -4,    -9,    12,    -9,    -9,    -9,    -9,    -9,    20,    27,
-      22,    -2,    -9,    26,    -9,    -9,     7,     7,     7,     7,
-      -9,    -9,    24,    28,    29,    30,     1,    -9,    -9,    -9,
-      -9,    -9,    -9,    -9,     7,    -9,    20,    35,    -9,    -9,
-      -9,    -9,    33,    -9
+     -23,     5,    18,   -23,   -19,   -17,    -6,    11,     6,   -12,
+     -23,   -23,    -8,   -23,   -23,   -23,    29,   -23,   -23,   -23,
+      24,   -23,   -23,    49,    47,    66,    -8,    -8,   -10,    -8,
+      63,    80,   -23,    47,    47,    47,    47,    -8,    12,    58,
+      54,    70,    99,    79,    -8,    -8,    50,   -23,   -23,   -23,
+     -23,   -23,    29,    47,   -23,    98,    62,    -8,    -8,    -8,
+      -8,    -8,    -8,    82,    76,    29,   -23,   -23,    84,   -23,
+      29,    29,    29,    29,    29,    29,   -23,   -23,   -23,    30,
+      57,   110,   -23,    90,   -23,    83,   -23
 };
 
 /* YYDEFACT[STATE-NUM] -- Default reduction number in state STATE-NUM.
@@ -670,26 +1345,29 @@ static const yytype_int8 yypact[] =
    means the default is an error.  */
 static const yytype_int8 yydefact[] =
 {
-       0,     0,     0,     0,     0,     0,    16,    17,     0,     0,
-       4,     5,    15,     6,     7,     8,     9,     1,     0,     0,
-      26,     0,    17,     0,     2,     3,     0,     0,     0,     0,
-      22,    23,     0,     0,    20,     0,     0,    28,    27,    14,
-      10,    11,    12,    13,     0,    18,     0,     0,    25,    24,
-      21,    19,     0,    29
+       3,     0,     2,     1,     0,     0,     0,     0,     0,    28,
+      29,    27,     0,     4,    10,    11,     5,    21,     6,     7,
+       0,     8,     9,    30,     0,     0,     0,     0,    35,     0,
+      28,     0,    30,     0,     0,     0,     0,     0,    33,     0,
+       0,     0,     0,     0,     0,     0,     0,    26,    22,    23,
+      24,    25,    39,     0,    31,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,    34,    41,    32,     0,     3,
+      17,    18,    19,    20,    15,    16,     3,    36,    40,     0,
+       0,    12,    14,     0,     3,     0,    13
 };
 
 /* YYPGOTO[NTERM-NUM].  */
 static const yytype_int8 yypgoto[] =
 {
-      -9,    -9,    36,    -9,    -8,    -9,    -9,    -7,    -9,    -9,
-      -9,    -9
+     -23,   -23,    -4,   -23,   -23,   -23,   100,   -11,   -22,   -23,
+      73,   -23,   -23,   -23,   -23,    -2
 };
 
 /* YYDEFGOTO[NTERM-NUM].  */
 static const yytype_int8 yydefgoto[] =
 {
-       0,     2,     9,    10,    11,    12,    13,    33,    34,    14,
-      15,    16
+       0,     1,     2,    13,    14,    15,    41,    16,    17,    18,
+      39,    19,    20,    21,    22,    32
 };
 
 /* YYTABLE[YYPACT[STATE-NUM]] -- What to do in state STATE-NUM.  If
@@ -697,50 +1375,71 @@ static const yytype_int8 yydefgoto[] =
    number is the opposite.  If YYTABLE_NINF, syntax error.  */
 static const yytype_int8 yytable[] =
 {
-      23,     3,     4,     5,     6,     7,     6,    22,    37,     6,
-      22,    48,     8,    38,     8,     6,    22,     8,    40,    41,
-      42,    43,     1,     8,    26,    27,    28,    29,    49,    30,
-      31,    32,    17,    18,    20,    19,    50,    24,    35,    51,
-      21,    36,    44,    39,    52,    45,    25,    46,    47,     0,
-      53
+      23,    31,    38,    30,    10,     3,    11,    29,    24,    44,
+      25,    48,    49,    50,    51,    42,    42,    28,    46,    12,
+     -37,    26,    45,     4,     5,     6,    52,     7,     8,     9,
+      10,    38,    11,    64,    65,     4,     5,     6,    27,     7,
+       8,     9,    10,    53,    11,    12,    70,    71,    72,    73,
+      74,    75,    33,    34,    35,    36,    37,    12,    30,    10,
+      81,    11,     4,     5,     6,    79,     7,     8,     9,    10,
+      66,    11,    80,    33,    34,    35,    36,    23,    23,    40,
+      85,   -38,    29,    23,    12,    55,    54,    82,     4,     5,
+       6,    69,     7,     8,     9,    10,    77,    11,    56,    33,
+      34,    35,    36,    33,    34,    35,    36,    63,    47,    68,
+      12,    76,    78,    86,    57,    58,    59,    60,    83,    84,
+      61,    62,    33,    34,    35,    36,    67,    43
 };
 
 static const yytype_int8 yycheck[] =
 {
-       8,     5,     6,     7,     8,     9,     8,     9,    10,     8,
-       9,    10,    16,    21,    16,     8,     9,    16,    26,    27,
-      28,    29,     4,    16,    12,    13,    14,    15,    36,     9,
-      10,    11,     0,    16,     9,    16,    44,     3,    11,    46,
-      19,    19,    18,    17,     9,    17,    10,    18,    18,    -1,
-      17
+       2,    12,    24,    11,    12,     0,    14,    19,    27,    19,
+      27,    33,    34,    35,    36,    26,    27,    11,    29,    27,
+      32,    27,    32,     5,     6,     7,    37,     9,    10,    11,
+      12,    53,    14,    44,    45,     5,     6,     7,    27,     9,
+      10,    11,    12,    31,    14,    27,    57,    58,    59,    60,
+      61,    62,    23,    24,    25,    26,    32,    27,    11,    12,
+      30,    14,     5,     6,     7,    69,     9,    10,    11,    12,
+      20,    14,    76,    23,    24,    25,    26,    79,    80,    13,
+      84,    32,    19,    85,    27,    31,    28,    30,     5,     6,
+       7,    29,     9,    10,    11,    12,    20,    14,    28,    23,
+      24,    25,    26,    23,    24,    25,    26,    28,    28,    11,
+      27,    29,    28,    30,    15,    16,    17,    18,     8,    29,
+      21,    22,    23,    24,    25,    26,    53,    27
 };
 
 /* YYSTOS[STATE-NUM] -- The symbol kind of the accessing symbol of
    state STATE-NUM.  */
 static const yytype_int8 yystos[] =
 {
-       0,     4,    21,     5,     6,     7,     8,     9,    16,    22,
-      23,    24,    25,    26,    29,    30,    31,     0,    16,    16,
-       9,    19,     9,    24,     3,    22,    12,    13,    14,    15,
-       9,    10,    11,    27,    28,    11,    19,    10,    24,    17,
-      24,    24,    24,    24,    18,    17,    18,    18,    10,    24,
-      24,    27,     9,    17
+       0,    34,    35,     0,     5,     6,     7,     9,    10,    11,
+      12,    14,    27,    36,    37,    38,    40,    41,    42,    44,
+      45,    46,    47,    48,    27,    27,    27,    27,    11,    19,
+      11,    40,    48,    23,    24,    25,    26,    32,    41,    43,
+      13,    39,    40,    39,    19,    32,    40,    28,    41,    41,
+      41,    41,    40,    31,    28,    31,    28,    15,    16,    17,
+      18,    21,    22,    28,    40,    40,    20,    43,    11,    29,
+      40,    40,    40,    40,    40,    40,    29,    20,    28,    35,
+      35,    30,    30,     8,    29,    35,    30
 };
 
 /* YYR1[RULE-NUM] -- Symbol kind of the left-hand side of rule RULE-NUM.  */
 static const yytype_int8 yyr1[] =
 {
-       0,    20,    21,    22,    22,    23,    23,    23,    23,    23,
-      24,    24,    24,    24,    24,    24,    25,    25,    26,    27,
-      27,    28,    28,    28,    29,    29,    29,    30,    30,    31
+       0,    33,    34,    35,    35,    36,    36,    36,    36,    36,
+      36,    36,    37,    37,    38,    39,    39,    39,    39,    39,
+      39,    40,    40,    40,    40,    40,    40,    41,    41,    41,
+      41,    42,    43,    43,    44,    44,    44,    45,    45,    46,
+      47,    48
 };
 
 /* YYR2[RULE-NUM] -- Number of symbols on the right-hand side of rule RULE-NUM.  */
 static const yytype_int8 yyr2[] =
 {
-       0,     2,     3,     2,     1,     1,     1,     1,     1,     1,
-       3,     3,     3,     3,     3,     1,     1,     1,     4,     3,
-       1,     3,     1,     1,     4,     4,     2,     3,     3,     6
+       0,     2,     1,     0,     2,     1,     1,     1,     1,     1,
+       1,     1,     7,    11,     7,     3,     3,     3,     3,     3,
+       3,     1,     3,     3,     3,     3,     3,     1,     1,     1,
+       1,     4,     3,     1,     4,     2,     5,     1,     1,     3,
+       6,     4
 };
 
 
@@ -1203,167 +1902,242 @@ yyreduce:
   YY_REDUCE_PRINT (yyn);
   switch (yyn)
     {
-  case 10: /* calcula: valor '+' calcula  */
-#line 80 "sintatico.y"
-                           { (yyval.ival) = (yyvsp[-2].ival) + (yyvsp[0].ival); }
-#line 1210 "sintatico.tab.c"
+  case 2: /* programa: bloco  */
+#line 710 "sintatico.y"
+                { executar((yyvsp[0].no)); liberar_ast((yyvsp[0].no)); liberar_tabela_simbolos(); }
+#line 1909 "sintatico.tab.c"
     break;
 
-  case 11: /* calcula: valor '-' calcula  */
-#line 81 "sintatico.y"
-                           { (yyval.ival) = (yyvsp[-2].ival) - (yyvsp[0].ival); }
-#line 1216 "sintatico.tab.c"
+  case 3: /* bloco: %empty  */
+#line 713 "sintatico.y"
+                                          { (yyval.no) = NULL; }
+#line 1915 "sintatico.tab.c"
     break;
 
-  case 12: /* calcula: valor '*' calcula  */
-#line 82 "sintatico.y"
-                           { (yyval.ival) = (yyvsp[-2].ival) * (yyvsp[0].ival); }
-#line 1222 "sintatico.tab.c"
+  case 4: /* bloco: bloco instrucao  */
+#line 714 "sintatico.y"
+                       { (yyval.no) = ((yyvsp[-1].no) == NULL) ? (yyvsp[0].no) : novo_op_binaria(';', (yyvsp[-1].no), (yyvsp[0].no)); }
+#line 1921 "sintatico.tab.c"
     break;
 
-  case 13: /* calcula: valor '/' calcula  */
-#line 83 "sintatico.y"
-                           { (yyval.ival) = (yyvsp[-2].ival) / (yyvsp[0].ival); }
-#line 1228 "sintatico.tab.c"
+  case 5: /* instrucao: calcula  */
+#line 717 "sintatico.y"
+                                   { (yyval.no) = (yyvsp[0].no); }
+#line 1927 "sintatico.tab.c"
     break;
 
-  case 14: /* calcula: '(' calcula ')'  */
-#line 84 "sintatico.y"
-                         { (yyval.ival) = (yyvsp[-1].ival); }
-#line 1234 "sintatico.tab.c"
+  case 6: /* instrucao: escreve  */
+#line 718 "sintatico.y"
+                                   { (yyval.no) = (yyvsp[0].no); }
+#line 1933 "sintatico.tab.c"
     break;
 
-  case 15: /* calcula: valor  */
-#line 85 "sintatico.y"
-               { (yyval.ival) = (yyvsp[0].ival); }
-#line 1240 "sintatico.tab.c"
+  case 7: /* instrucao: declaracao  */
+#line 719 "sintatico.y"
+                                   { (yyval.no) = (yyvsp[0].no); }
+#line 1939 "sintatico.tab.c"
     break;
 
-  case 16: /* valor: NUMERO  */
-#line 88 "sintatico.y"
-                 { (yyval.ival) = (yyvsp[0].ival); }
-#line 1246 "sintatico.tab.c"
+  case 8: /* instrucao: atribuicao  */
+#line 720 "sintatico.y"
+                                   { (yyval.no) = (yyvsp[0].no); }
+#line 1945 "sintatico.tab.c"
     break;
 
-  case 17: /* valor: ID  */
-#line 89 "sintatico.y"
-                 {
-            Variavel *v = buscar_variavel((yyvsp[0].sval));
-            if (!v) {
-                yyerror("Variável não declarada");
-                YYABORT;
-            }
-            if (strcmp(v->tipo, "int") == 0) {
-                (yyval.ival) = v->valor.ival;
-            } else {
-                yyerror("Operação matemática inválida.");
-                YYABORT;
-            }
-        }
-#line 1264 "sintatico.tab.c"
+  case 9: /* instrucao: entrada  */
+#line 721 "sintatico.y"
+                                   { (yyval.no) = (yyvsp[0].no); }
+#line 1951 "sintatico.tab.c"
     break;
 
-  case 20: /* saidas: tipos_saida  */
-#line 106 "sintatico.y"
-                     { printf("\n"); }
-#line 1270 "sintatico.tab.c"
+  case 10: /* instrucao: if_instrucao  */
+#line 722 "sintatico.y"
+                                   { (yyval.no) = (yyvsp[0].no); }
+#line 1957 "sintatico.tab.c"
     break;
 
-  case 21: /* tipos_saida: MASCARA ',' calcula  */
-#line 109 "sintatico.y"
-                                { 
-                if(strcmp((yyvsp[-2].sval), "%i") == 0){
-                    printf("%d", (yyvsp[0].ival));
-                }
-            }
-#line 1280 "sintatico.tab.c"
+  case 11: /* instrucao: while_instrucao  */
+#line 723 "sintatico.y"
+                                   { (yyval.no) = (yyvsp[0].no); }
+#line 1963 "sintatico.tab.c"
     break;
 
-  case 22: /* tipos_saida: ID  */
-#line 114 "sintatico.y"
-                      { 
-                Variavel *v = buscar_variavel((yyvsp[0].sval));
-                if (!v) {
-                    yyerror("Variável não declarada");
-                    YYABORT;
-                }
-                if (strcmp(v->tipo, "int") == 0) {
-                    printf("%d", v->valor.ival);
-                } else {
-                    printf("%s", v->valor.sval);
-                }
-            }
-#line 1297 "sintatico.tab.c"
+  case 12: /* if_instrucao: IF '(' condicao ')' '{' bloco '}'  */
+#line 726 "sintatico.y"
+                                                                { (yyval.no) = novo_se((yyvsp[-4].no), (yyvsp[-1].no), NULL); }
+#line 1969 "sintatico.tab.c"
     break;
 
-  case 23: /* tipos_saida: STRING  */
-#line 126 "sintatico.y"
-                     { printf("%s", (yyvsp[0].sval)); }
-#line 1303 "sintatico.tab.c"
+  case 13: /* if_instrucao: IF '(' condicao ')' '{' bloco '}' ELSE '{' bloco '}'  */
+#line 727 "sintatico.y"
+                                                                   { (yyval.no) = novo_se((yyvsp[-8].no), (yyvsp[-5].no), (yyvsp[-1].no)); }
+#line 1975 "sintatico.tab.c"
     break;
 
-  case 24: /* declara: TIPO ID '=' calcula  */
-#line 129 "sintatico.y"
-                             {
-            inserir_variavel((yyvsp[-3].sval), (yyvsp[-2].sval), (yyvsp[0].ival), NULL);
-        }
-#line 1311 "sintatico.tab.c"
+  case 14: /* while_instrucao: WHILE '(' condicao ')' '{' bloco '}'  */
+#line 730 "sintatico.y"
+                                                               { (yyval.no) = novo_enquanto((yyvsp[-4].no), (yyvsp[-1].no)); }
+#line 1981 "sintatico.tab.c"
     break;
 
-  case 25: /* declara: TIPO ID '=' STRING  */
-#line 132 "sintatico.y"
-                            {
-            inserir_variavel((yyvsp[-3].sval), (yyvsp[-2].sval), 0, (yyvsp[0].sval));
-        }
-#line 1319 "sintatico.tab.c"
+  case 15: /* condicao: calcula '<' calcula  */
+#line 733 "sintatico.y"
+                                   { (yyval.no) = novo_op_binaria('<', (yyvsp[-2].no), (yyvsp[0].no)); }
+#line 1987 "sintatico.tab.c"
     break;
 
-  case 26: /* declara: TIPO ID  */
-#line 135 "sintatico.y"
-                 {
-            inserir_variavel((yyvsp[-1].sval), (yyvsp[0].sval), 0, NULL);
-        }
-#line 1327 "sintatico.tab.c"
+  case 16: /* condicao: calcula '>' calcula  */
+#line 734 "sintatico.y"
+                                   { (yyval.no) = novo_op_binaria('>', (yyvsp[-2].no), (yyvsp[0].no)); }
+#line 1993 "sintatico.tab.c"
     break;
 
-  case 27: /* atribui: ID '=' calcula  */
-#line 140 "sintatico.y"
-                        {
-            Variavel *v = buscar_variavel((yyvsp[-2].sval));
-            inserir_variavel(v->tipo, v->nome, (yyvsp[0].ival), NULL);
-        }
-#line 1336 "sintatico.tab.c"
+  case 17: /* condicao: calcula ME calcula  */
+#line 735 "sintatico.y"
+                                   { (yyval.no) = novo_op_binaria('L', (yyvsp[-2].no), (yyvsp[0].no)); }
+#line 1999 "sintatico.tab.c"
     break;
 
-  case 28: /* atribui: ID '=' STRING  */
-#line 144 "sintatico.y"
-                       {
-            Variavel *v = buscar_variavel((yyvsp[-2].sval));
-            inserir_variavel(v->tipo, v->nome, 0, (yyvsp[0].sval));
-        }
-#line 1345 "sintatico.tab.c"
+  case 18: /* condicao: calcula MA calcula  */
+#line 736 "sintatico.y"
+                                   { (yyval.no) = novo_op_binaria('A', (yyvsp[-2].no), (yyvsp[0].no)); }
+#line 2005 "sintatico.tab.c"
     break;
 
-  case 29: /* entrada: STDIN '(' MASCARA ',' ID ')'  */
-#line 149 "sintatico.y"
-                                  {
-            Variavel *v = buscar_variavel((yyvsp[-1].sval));
-            if (!v) {
-                yyerror("Variável não declarada");
-                YYABORT;
-            }
+  case 19: /* condicao: calcula IG calcula  */
+#line 737 "sintatico.y"
+                                   { (yyval.no) = novo_op_binaria('E', (yyvsp[-2].no), (yyvsp[0].no)); }
+#line 2011 "sintatico.tab.c"
+    break;
 
-            if(strcmp((yyvsp[-3].sval), "%i") == 0){
-                int temp;
-                scanf("%d", &temp);
-                inserir_variavel(v->tipo, v->nome, temp, NULL);
-            }
-        }
-#line 1363 "sintatico.tab.c"
+  case 20: /* condicao: calcula DI calcula  */
+#line 738 "sintatico.y"
+                                   { (yyval.no) = novo_op_binaria('D', (yyvsp[-2].no), (yyvsp[0].no)); }
+#line 2017 "sintatico.tab.c"
+    break;
+
+  case 22: /* calcula: calcula '+' valor  */
+#line 742 "sintatico.y"
+                                   { (yyval.no) = novo_op_binaria('+', (yyvsp[-2].no), (yyvsp[0].no)); }
+#line 2023 "sintatico.tab.c"
+    break;
+
+  case 23: /* calcula: calcula '-' valor  */
+#line 743 "sintatico.y"
+                                   { (yyval.no) = novo_op_binaria('-', (yyvsp[-2].no), (yyvsp[0].no)); }
+#line 2029 "sintatico.tab.c"
+    break;
+
+  case 24: /* calcula: calcula '*' valor  */
+#line 744 "sintatico.y"
+                                   { (yyval.no) = novo_op_binaria('*', (yyvsp[-2].no), (yyvsp[0].no)); }
+#line 2035 "sintatico.tab.c"
+    break;
+
+  case 25: /* calcula: calcula '/' valor  */
+#line 745 "sintatico.y"
+                                   { (yyval.no) = novo_op_binaria('/', (yyvsp[-2].no), (yyvsp[0].no)); }
+#line 2041 "sintatico.tab.c"
+    break;
+
+  case 26: /* calcula: '(' calcula ')'  */
+#line 746 "sintatico.y"
+                                   { (yyval.no) = (yyvsp[-1].no); }
+#line 2047 "sintatico.tab.c"
+    break;
+
+  case 27: /* valor: NUMERO  */
+#line 749 "sintatico.y"
+                                   { (yyval.no) = novo_numero((yyvsp[0].valor_numerico)); }
+#line 2053 "sintatico.tab.c"
+    break;
+
+  case 28: /* valor: VAR  */
+#line 750 "sintatico.y"
+                                   { (yyval.no) = novo_variavel((yyvsp[0].valor_texto)); }
+#line 2059 "sintatico.tab.c"
+    break;
+
+  case 29: /* valor: STRING  */
+#line 751 "sintatico.y"
+                                   { (yyval.no) = novo_texto((yyvsp[0].valor_texto)); }
+#line 2065 "sintatico.tab.c"
+    break;
+
+  case 30: /* valor: acesso_array  */
+#line 752 "sintatico.y"
+                                   { (yyval.no) = (yyvsp[0].no); }
+#line 2071 "sintatico.tab.c"
+    break;
+
+  case 31: /* escreve: PRINT '(' argumentos ')'  */
+#line 755 "sintatico.y"
+                                   { (yyval.no) = novo_impressao((yyvsp[-1].lista_nos)); }
+#line 2077 "sintatico.tab.c"
+    break;
+
+  case 32: /* argumentos: valor ',' argumentos  */
+#line 758 "sintatico.y"
+                                   { (yyval.lista_nos) = nova_lista_nos((yyvsp[-2].no), (yyvsp[0].lista_nos)); }
+#line 2083 "sintatico.tab.c"
+    break;
+
+  case 33: /* argumentos: valor  */
+#line 759 "sintatico.y"
+                                   { (yyval.lista_nos) = nova_lista_nos((yyvsp[0].no), NULL); }
+#line 2089 "sintatico.tab.c"
+    break;
+
+  case 34: /* declaracao: TIPO VAR '=' calcula  */
+#line 763 "sintatico.y"
+                                     { (yyval.no) = novo_declaracao((yyvsp[-3].valor_texto), (yyvsp[-2].valor_texto), (yyvsp[0].no)); }
+#line 2095 "sintatico.tab.c"
+    break;
+
+  case 35: /* declaracao: TIPO VAR  */
+#line 764 "sintatico.y"
+                                     { (yyval.no) = novo_declaracao((yyvsp[-1].valor_texto), (yyvsp[0].valor_texto), NULL); }
+#line 2101 "sintatico.tab.c"
+    break;
+
+  case 36: /* declaracao: TIPO VAR '[' calcula ']'  */
+#line 765 "sintatico.y"
+                                     { (yyval.no) = novo_declaracao_array((yyvsp[-4].valor_texto), (yyvsp[-3].valor_texto), (yyvsp[-1].no)); }
+#line 2107 "sintatico.tab.c"
+    break;
+
+  case 37: /* lvalue: VAR  */
+#line 769 "sintatico.y"
+                                   { (yyval.no) = novo_variavel((yyvsp[0].valor_texto)); }
+#line 2113 "sintatico.tab.c"
+    break;
+
+  case 38: /* lvalue: acesso_array  */
+#line 770 "sintatico.y"
+                                   { (yyval.no) = (yyvsp[0].no); }
+#line 2119 "sintatico.tab.c"
+    break;
+
+  case 39: /* atribuicao: lvalue '=' calcula  */
+#line 774 "sintatico.y"
+                                   { (yyval.no) = novo_atribuicao((yyvsp[-2].no), (yyvsp[0].no)); }
+#line 2125 "sintatico.tab.c"
+    break;
+
+  case 40: /* entrada: STDIN '(' MASCARA ',' VAR ')'  */
+#line 777 "sintatico.y"
+                                       { (yyval.no) = novo_entrada((yyvsp[-3].valor_texto), (yyvsp[-1].valor_texto)); }
+#line 2131 "sintatico.tab.c"
+    break;
+
+  case 41: /* acesso_array: VAR '[' calcula ']'  */
+#line 781 "sintatico.y"
+                                   { (yyval.no) = novo_acesso_array((yyvsp[-3].valor_texto), (yyvsp[-1].no)); }
+#line 2137 "sintatico.tab.c"
     break;
 
 
-#line 1367 "sintatico.tab.c"
+#line 2141 "sintatico.tab.c"
 
       default: break;
     }
@@ -1556,15 +2330,16 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 162 "sintatico.y"
+#line 784 "sintatico.y"
 
 
+// Inclui o arquivo gerado pelo flex (lexer)
 #include "lex.yy.c"
 
 int main() {
     FILE *codigo = fopen("entrada.rag", "r");
     if (!codigo) {
-        perror("entrada.txt");
+        perror("Erro ao abrir 'entrada.rag'");
         return 1;
     }
     yyin = codigo;
@@ -1572,3 +2347,8 @@ int main() {
     fclose(codigo);
     return 0;
 }
+
+void yyerror(const char *s) {
+    fprintf(stderr, "Erro de sintaxe na linha %d: %s\n", yylineno, s);
+}
+

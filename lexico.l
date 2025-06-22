@@ -1,62 +1,89 @@
 %{
-	#include <string.h>
+    #include <string.h>
+    #include "sintatico.tab.h"
+    // yylineno é uma variável global do Flex que rastreia o número da linha atual
 %}
+
+%option noyywrap
 
 FIM "FIM"
 INICIO "INICIO"
 PRINT "PRINT"
 STDIN "STDIN"
-TIPO "INT"|"STRING"
+IF "IF"
+ELSE "ELSE"
+WHILE "WHILE"
 
-ID [A-Za-z]+
-NUMERO [0-9]+
+TIPO "NUM"|"STR"
+VAR [A-Za-z_][A-Za-z0-9_]*
+NUMERO [0-9]+(\.[0-9]+)?
 
 STRING \"(\\.|[^"\\])*\"
+MASCARA '%[is]'
 
-MASCARA %(i|s)
 
 %%
 
-{FIM} { return FIM; }
-{INICIO} { return INICIO; }
-{PRINT} { return PRINT; }
-{STDIN} { return STDIN; }
+{FIM}      { return FIM; }
+{INICIO}   { return INICIO; }
+{PRINT}    { return PRINT; }
+{STDIN}    { return STDIN; }
+{IF}       { return IF; }
+{ELSE}     { return ELSE; }
+{WHILE}    { return WHILE; }
+
+"<="         { return ME; }
+">="         { return MA; }
+"=="         { return IG; }
+"!="         { return DI; }
+
+"<"          { return '<'; }
+">"          { return '>'; }
+"+"          { return '+'; }
+"-"          { return '-'; }
+"*"          { return '*'; }
+"/"          { return '/'; }
+"="          { return '='; }
+"("          { return '('; }
+")"          { return ')'; }
+"{"          { return '{'; }
+"}"          { return '}'; }
+","          { return ','; }
+";"          { return ';'; }
+"["          { return '['; }
+"]"          { return ']'; } 
+
+\n         { yylineno++; }
+[ \t]+     {  }
+
 
 {TIPO} {
-    yylval.sval = strdup(yytext);
+    yylval.valor_texto = strdup(yytext);
     return TIPO;
 }
 
-{ID} {
-    yylval.sval = strdup(yytext);
-    return ID;
+{VAR} {
+    yylval.valor_texto = strdup(yytext); 
+    return VAR;
 }
 
 {NUMERO} {
-    yylval.ival = atoi(yytext);
+    yylval.valor_numerico = atof(yytext);
     return NUMERO;
 }
 
 {STRING} {
-    yylval.sval = strdup(yytext+1);
-    yylval.sval[yyleng-2] = '\0';
+    yylval.valor_texto = strdup(yytext + 1);
+    yylval.valor_texto[yyleng - 2] = '\0';
     return STRING;
 }
 
 {MASCARA} {
-    yylval.sval = strdup(yytext);
+    yylval.valor_texto = strdup(yytext + 1);
+    yylval.valor_texto[yyleng - 2] = '\0';
     return MASCARA;
 }
 
-"+" { return '+'; }
-"-" { return '-'; }
-"*" { return '*'; }
-"/" { return '/'; }
-"(" { return '('; }
-")" { return ')'; }
-"=" { return '='; }
-"," { return ','; }
-
-[\ \n\t]* { ; } 
+. { fprintf(stderr, "Caractere inválido na linha %d: %s\n", yylineno, yytext); }
 
 %%
