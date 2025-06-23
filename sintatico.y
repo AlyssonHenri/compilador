@@ -258,7 +258,7 @@ void inserir_array(char *tipo_base_str, char *nome, No *tamanho_no) {
         fprintf(stderr, "Erro na linha %d: Tamanho de array inválido para '%s'. Deve ser um inteiro positivo.\n", yylineno, nome);
         return;
     }
-    int tamanho = (int)tamanho_val;
+    int tamanho = (int)tamanho_val+1;
 
     Variavel *v = malloc(sizeof(Variavel));
     if (!v) { perror("Erro ao alocar Variavel para array"); exit(1); }
