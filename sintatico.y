@@ -27,7 +27,7 @@ typedef struct No {
         struct { char *tipo, *nome; struct No *inicializacao; } declaracao;
         struct { struct No *target; struct No *valor; } atribuicao;
         struct { struct ListaNos *argumentos; } impressao;
-        struct { char *mascara; char *variavel; } entrada;
+        struct { char *mascara; struct No *destino; } entrada;
         struct { struct No *condicao; struct No *bloco_then; struct No *bloco_else; } se;
         struct { struct No *condicao; struct No *bloco_fazer; } enquanto;
         struct { char *tipo_base; char *nome; struct No *tamanho; } declaracao_array;
@@ -66,7 +66,7 @@ No *novo_variavel(char *nome);
 No *novo_declaracao(char *tipo, char *nome, No *inicializacao);
 No *novo_atribuicao(No *target, No *valor);
 No *novo_impressao(ListaNos *argumentos);
-No *novo_entrada(char *mascara, char *variavel);
+No *novo_entrada(char *mascara, No *destino);
 No *novo_se(No *condicao, No *bloco_then, No *bloco_else);
 No *novo_enquanto(No *condicao, No *bloco_fazer);
 No *novo_declaracao_array(char *tipo_base, char *nome, No *tamanho);
@@ -157,12 +157,12 @@ No *novo_atribuicao(No *target, No *valor) {
     return n;
 }
 
-No *novo_entrada(char *mascara, char *variavel) {
+No *novo_entrada(char *mascara, No *destino) {
     No *n = malloc(sizeof(No));
     if (!n) { perror("Erro ao alocar novo_entrada"); exit(1); }
     n->tipo = AST_ENTRADA;
     n->entrada.mascara = strdup(mascara);
-    n->entrada.variavel = strdup(variavel);
+    n->entrada.destino = destino;
     return n;
 }
 
@@ -210,7 +210,7 @@ No *novo_acesso_array(char *nome_array, No *indice) {
 
 void inserir_variavel(char *tipo_str, char *nome, No *inicializacao) {
     if (buscar_variavel(nome)) {
-        fprintf(stderr, "Erro semântico na linha %d: Variável '%s' já declarada.\n", yylineno, nome);
+        fprintf(stderr, "Erro na linha %d: Variável '%s' já declarada.\n", yylineno, nome);
         return;
     }
 
@@ -237,10 +237,10 @@ void inserir_variavel(char *tipo_str, char *nome, No *inicializacao) {
                     free(v->valor.valor_texto);
                     v->valor.valor_texto = strdup(orig_var->valor.valor_texto);
                 } else {
-                    fprintf(stderr, "Erro semântico na linha %d: Inicialização de STR com tipo incompatível.\n", yylineno);
+                    fprintf(stderr, "Erro na linha %d: Inicialização de STR com tipo incompatível.\n", yylineno);
                 }
             } else {
-                fprintf(stderr, "Erro semântico na linha %d: Inicialização incompatível para o tipo STR.\n", yylineno);
+                fprintf(stderr, "Erro na linha %d: Inicialização incompatível para o tipo STR.\n", yylineno);
             }
         }
     }
@@ -249,13 +249,13 @@ void inserir_variavel(char *tipo_str, char *nome, No *inicializacao) {
 
 void inserir_array(char *tipo_base_str, char *nome, No *tamanho_no) {
     if (buscar_variavel(nome)) {
-        fprintf(stderr, "Erro semântico na linha %d: Array '%s' já declarado.\n", yylineno, nome);
+        fprintf(stderr, "Erro na linha %d: Array '%s' já declarado.\n", yylineno, nome);
         return;
     }
 
     double tamanho_val = avaliar_expressao(tamanho_no);
     if (tamanho_val <= 0 || fmod(tamanho_val, 1.0) != 0) {
-        fprintf(stderr, "Erro semântico na linha %d: Tamanho de array inválido para '%s'. Deve ser um inteiro positivo.\n", yylineno, nome);
+        fprintf(stderr, "Erro na linha %d: Tamanho de array inválido para '%s'. Deve ser um inteiro positivo.\n", yylineno, nome);
         return;
     }
     int tamanho = (int)tamanho_val;
@@ -278,7 +278,7 @@ void inserir_array(char *tipo_base_str, char *nome, No *tamanho_no) {
             if (!((char **)v->valor.array_info.elementos)[i]) { perror("Erro ao alocar string vazia no array"); exit(1); }
         }
     } else {
-        fprintf(stderr, "Erro semântico na linha %d: Tipo base de array '%s' não suportado. Use 'NUM' ou 'STR'.\n", yylineno, tipo_base_str);
+        fprintf(stderr, "Erro na linha %d: Tipo base de array '%s' não suportado. Use 'NUM' ou 'STR'.\n", yylineno, tipo_base_str);
         free(v->nome); free(v->tipo); free(v->valor.array_info.tipo_base); free(v);
         return;
     }
@@ -501,43 +501,98 @@ void executar(No *no) {
             break;
         }
         case AST_ENTRADA: {
-            Variavel *v = buscar_variavel(no->entrada.variavel);
-            if (!v) {
-                fprintf(stderr, "Erro na linha %d: Variável '%s' não declarada.\n", yylineno, no->entrada.variavel);
-                return;
-            }
-            if (strcmp(v->tipo, "NUM") == 0) {
-                if (strcmp(no->entrada.mascara, "%i") == 0 || strcmp(no->entrada.mascara, "%d") == 0) {
-                    int valor;
-                    if (scanf("%d", &valor) == 1) {
-                        v->valor.valor_numerico = (double)valor;
+            No *dest = no->entrada.destino;
+            if (dest->tipo == AST_VARIAVEL) {
+                Variavel *v = buscar_variavel(dest->variavel.nome);
+                if (!v) {
+                    fprintf(stderr, "Erro na linha %d: Variável '%s' não declarada.\n", yylineno, dest->variavel.nome);
+                    return;
+                }
+                if (strcmp(v->tipo, "NUM") == 0) {
+                    if (strcmp(no->entrada.mascara, "%i") == 0 || strcmp(no->entrada.mascara, "%d") == 0) {
+                        int valor;
+                        if (scanf("%d", &valor) == 1) {
+                            v->valor.valor_numerico = (double)valor;
+                        } else {
+                            fprintf(stderr, "Erro na linha %d: Falha na leitura de inteiro.\n", yylineno);
+                        }
+                    } else if (strcmp(no->entrada.mascara, "%f") == 0) {
+                        double valor;
+                        if (scanf("%lf", &valor) == 1) {
+                            v->valor.valor_numerico = valor;
+                        } else {
+                            fprintf(stderr, "Erro na linha %d: Falha na leitura de float.\n", yylineno);
+                        }
                     } else {
-                         fprintf(stderr, "Erro na linha %d: Falha na leitura de inteiro.\n", yylineno);
+                        fprintf(stderr, "Erro na linha %d: Máscara de formato '%s' incompatível com tipo NUM para entrada.\n", yylineno, no->entrada.mascara);
                     }
-                } else if (strcmp(no->entrada.mascara, "%f") == 0) {
-                    double valor;
-                    if (scanf("%lf", &valor) == 1) {
-                        v->valor.valor_numerico = valor;
+                } else if (strcmp(v->tipo, "STR") == 0) {
+                    if (strcmp(no->entrada.mascara, "%s") == 0) {
+                        char buffer[256];
+                        if (scanf("%255s", buffer) == 1) {
+                            free(v->valor.valor_texto);
+                            v->valor.valor_texto = strdup(buffer);
+                        } else {
+                            fprintf(stderr, "Erro na linha %d: Falha na leitura de string.\n", yylineno);
+                        }
                     } else {
-                         fprintf(stderr, "Erro na linha %d: Falha na leitura de float.\n", yylineno);
+                        fprintf(stderr, "Erro na linha %d: Máscara de formato '%s' incompatível com tipo STR para entrada.\n", yylineno, no->entrada.mascara);
                     }
                 } else {
-                    fprintf(stderr, "Erro na linha %d: Máscara de formato '%s' incompatível com tipo NUM para entrada.\n", yylineno, no->entrada.mascara);
+                    fprintf(stderr, "Erro na linha %d: STDIN não suporta variáveis do tipo '%s'.\n", yylineno, v->tipo);
                 }
-            } else if (strcmp(v->tipo, "STR") == 0) {
-                if (strcmp(no->entrada.mascara, "%s") == 0) {
-                    char buffer[256];
-                    if (scanf("%255s", buffer) == 1) {
-                        free(v->valor.valor_texto);
-                        v->valor.valor_texto = strdup(buffer);
+            } else if (dest->tipo == AST_ACESSO_ARRAY) {
+                char *array_name = dest->acesso_array.nome_array;
+                No *indice_node = dest->acesso_array.indice;
+        
+                Variavel *array_var = buscar_variavel(array_name);
+                if (!array_var) {
+                    fprintf(stderr, "Erro na linha %d: Array '%s' não declarado.\n", yylineno, array_name);
+                    return;
+                }
+                if (strcmp(array_var->tipo, "NUM_ARRAY") != 0 && strcmp(array_var->tipo, "STR_ARRAY") != 0) {
+                    fprintf(stderr, "Erro na linha %d: '%s' não é um array.\n", yylineno, array_name);
+                    return;
+                }
+        
+                double indice_val = avaliar_expressao(indice_node);
+                if (indice_val < 0 || fmod(indice_val, 1.0) != 0 || indice_val >= array_var->valor.array_info.tamanho) {
+                    fprintf(stderr, "Erro na linha %d: Índice de array fora dos limites para '%s'. Índice: %.0f, Tamanho: %d.\n", yylineno, array_var->nome, indice_val, array_var->valor.array_info.tamanho);
+                    return;
+                }
+                int indice = (int)indice_val;
+        
+                if (strcmp(array_var->valor.array_info.tipo_base, "NUM") == 0) {
+                    if (strcmp(no->entrada.mascara, "%i") == 0 || strcmp(no->entrada.mascara, "%d") == 0) {
+                        int valor;
+                        if (scanf("%d", &valor) == 1) {
+                            ((double *)array_var->valor.array_info.elementos)[indice] = (double)valor;
+                        } else {
+                            fprintf(stderr, "Erro na linha %d: Falha na leitura de inteiro para array.\n", yylineno);
+                        }
+                    } else if (strcmp(no->entrada.mascara, "%f") == 0) {
+                        double valor;
+                        if (scanf("%lf", &valor) == 1) {
+                            ((double *)array_var->valor.array_info.elementos)[indice] = valor;
+                        } else {
+                            fprintf(stderr, "Erro na linha %d: Falha na leitura de float para array.\n", yylineno);
+                        }
                     } else {
-                        fprintf(stderr, "Erro na linha %d: Falha na leitura de string.\n", yylineno);
+                        fprintf(stderr, "Erro na linha %d: Máscara de formato '%s' incompatível com array NUM.\n", yylineno, no->entrada.mascara);
                     }
-                } else {
-                    fprintf(stderr, "Erro na linha %d: Máscara de formato '%s' incompatível com tipo STR para entrada.\n", yylineno, no->entrada.mascara);
+                } else if (strcmp(array_var->valor.array_info.tipo_base, "STR") == 0) {
+                    if (strcmp(no->entrada.mascara, "%s") == 0) {
+                        char buffer[256];
+                        if (scanf("%255s", buffer) == 1) {
+                            free(((char **)array_var->valor.array_info.elementos)[indice]);
+                            ((char **)array_var->valor.array_info.elementos)[indice] = strdup(buffer);
+                        } else {
+                            fprintf(stderr, "Erro na linha %d: Falha na leitura de string para array.\n", yylineno);
+                        }
+                    } else {
+                        fprintf(stderr, "Erro na linha %d: Máscara de formato '%s' incompatível com array STR.\n", yylineno, no->entrada.mascara);
+                    }
                 }
-            } else {
-                fprintf(stderr, "Erro na linha %d: STDIN não suporta variáveis do tipo '%s'.\n", yylineno, v->tipo);
             }
             int c; while ((c = getchar()) != '\n' && c != EOF);
             break;
@@ -620,7 +675,7 @@ void liberar_ast(No *no) {
         }
         case AST_ENTRADA:
             free(no->entrada.mascara);
-            free(no->entrada.variavel);
+            liberar_ast(no->entrada.destino);
             break;
         case AST_IF:
             liberar_ast(no->se.condicao);
@@ -742,7 +797,7 @@ lvalue: VAR                        { $$ = novo_variavel($1); }
 atribuicao: lvalue '=' calcula     { $$ = novo_atribuicao($1, $3); }
           ;
 
-entrada: STDIN '(' MASCARA ',' VAR ')' { $$ = novo_entrada($3, $5); }
+entrada: STDIN '(' MASCARA ',' lvalue ')' { $$ = novo_entrada($3, $5); }
        ;
 
 acesso_array: VAR '[' calcula ']'  { $$ = novo_acesso_array($1, $3); }
