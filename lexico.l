@@ -1,13 +1,10 @@
 %{
     #include <string.h>
     #include "sintatico.tab.h"
-    // yylineno é uma variável global do Flex que rastreia o número da linha atual
 %}
 
 %option noyywrap
 
-FIM "FIM"
-INICIO "INICIO"
 PRINT "PRINT"
 STDIN "STDIN"
 IF "IF"
@@ -21,16 +18,13 @@ NUMERO [0-9]+(\.[0-9]+)?
 STRING \"(\\.|[^"\\])*\"
 MASCARA '%[is]'
 
-
 %%
 
-{FIM}      { return FIM; }
-{INICIO}   { return INICIO; }
-{PRINT}    { return PRINT; }
-{STDIN}    { return STDIN; }
-{IF}       { return IF; }
-{ELSE}     { return ELSE; }
-{WHILE}    { return WHILE; }
+{PRINT}      { return PRINT; }
+{STDIN}      { return STDIN; }
+{IF}         { return IF; }
+{ELSE}       { return ELSE; }
+{WHILE}      { return WHILE; }
 
 "<="         { return ME; }
 ">="         { return MA; }
@@ -53,8 +47,8 @@ MASCARA '%[is]'
 "["          { return '['; }
 "]"          { return ']'; } 
 
-\n         { yylineno++; }
-[ \t]+     {  }
+\n           { yylineno++; }
+[ \t]+       {  }
 
 
 {TIPO} {
@@ -83,6 +77,9 @@ MASCARA '%[is]'
     yylval.valor_texto[yyleng - 2] = '\0';
     return MASCARA;
 }
+
+"\\\\".*\n   { yylineno++; }
+"\\\\".*     {  }
 
 . { fprintf(stderr, "Caractere inválido na linha %d: %s\n", yylineno, yytext); }
 

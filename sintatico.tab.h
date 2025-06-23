@@ -54,15 +54,20 @@ extern int yydebug;
     YYEOF = 0,                     /* "end of file"  */
     YYerror = 256,                 /* error  */
     YYUNDEF = 257,                 /* "invalid token"  */
-    FIM = 258,                     /* FIM  */
-    INICIO = 259,                  /* INICIO  */
-    PRINT = 260,                   /* PRINT  */
-    STDIN = 261,                   /* STDIN  */
-    TIPO = 262,                    /* TIPO  */
-    VAR = 263,                     /* VAR  */
-    STRING = 264,                  /* STRING  */
-    MASCARA = 265,                 /* MASCARA  */
-    NUMERO = 266                   /* NUMERO  */
+    PRINT = 258,                   /* PRINT  */
+    STDIN = 259,                   /* STDIN  */
+    IF = 260,                      /* IF  */
+    ELSE = 261,                    /* ELSE  */
+    WHILE = 262,                   /* WHILE  */
+    ME = 263,                      /* ME  */
+    MA = 264,                      /* MA  */
+    IG = 265,                      /* IG  */
+    DI = 266,                      /* DI  */
+    TIPO = 267,                    /* TIPO  */
+    VAR = 268,                     /* VAR  */
+    STRING = 269,                  /* STRING  */
+    MASCARA = 270,                 /* MASCARA  */
+    NUMERO = 271                   /* NUMERO  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -71,14 +76,14 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 204 "sintatico.y"
+#line 656 "sintatico.y"
 
-    int valor_inteiro;
+    double valor_numerico;
     char *valor_texto;
     No *no;
     ListaNos *lista_nos;
 
-#line 82 "sintatico.tab.h"
+#line 87 "sintatico.tab.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

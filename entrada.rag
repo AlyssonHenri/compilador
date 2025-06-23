@@ -1,9 +1,7 @@
-NUM meuVetor[10]
-meuVetor[0] = 100
-meuVetor[1] = meuVetor[0] + 50
-PRINT(meuVetor[1])
+NUM x = 20
+NUM y = 10
 
-STR nomes[3]
-nomes[0] = "Alice"
-nomes[1] = "Bob"
-PRINT(nomes[0], nomes[1])
+while( x < 30 ){
+    PRINT(x)
+    x = x+1
+}

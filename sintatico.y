@@ -9,6 +9,7 @@
 int yylex(void);
 void yyerror(const char *s);
 extern int yylineno;
+extern FILE *yyin;
 
 typedef enum {
     AST_OP_BINARIA, AST_NUMERO, AST_TEXTO, AST_VARIAVEL,
@@ -41,7 +42,7 @@ typedef struct ListaNos {
 
 typedef struct {
     char *nome;
-    char *tipo; // NUM, STR, NUM_ARRAY, STR_ARRAY
+    char *tipo;
     union {
         double valor_numerico;
         char *valor_texto;
@@ -137,7 +138,11 @@ No *novo_declaracao(char *tipo, char *nome, No *inicializacao) {
     No *n = malloc(sizeof(No));
     if (!n) { perror("Erro ao alocar novo_declaracao"); exit(1); }
     n->tipo = AST_DECLARACAO;
-    n->declaracao.tipo = strdup(tipo);
+    char *tipo_mod = strdup(tipo);
+    for (char *p = tipo_mod; *p; ++p){
+        *p = toupper(*p);
+    }
+    n->declaracao.tipo = strdup(tipo_mod);
     n->declaracao.nome = strdup(nome);
     n->declaracao.inicializacao = inicializacao;
     return n;
@@ -184,7 +189,11 @@ No *novo_declaracao_array(char *tipo_base, char *nome, No *tamanho) {
     No *n = malloc(sizeof(No));
     if (!n) { perror("Erro ao alocar novo_declaracao_array"); exit(1); }
     n->tipo = AST_DECLARACAO_ARRAY;
-    n->declaracao_array.tipo_base = strdup(tipo_base);
+    char *tipo_mod = strdup(tipo_base);
+    for (char *p = tipo_mod; *p; ++p){
+        *p = toupper(*p);
+    }
+    n->declaracao_array.tipo_base = strdup(tipo_mod);
     n->declaracao_array.nome = strdup(nome);
     n->declaracao_array.tamanho = tamanho;
     return n;
@@ -652,12 +661,10 @@ void liberar_ast(No *no) {
     ListaNos *lista_nos;
 }
 
-%token FIM INICIO PRINT STDIN IF ELSE WHILE
+%token PRINT STDIN IF ELSE WHILE ME MA IG DI
 %token <valor_texto> TIPO VAR STRING MASCARA
 %token <valor_numerico> NUMERO
-%token ME MA IG DI // Tokens para operadores de comparação
 
-// Tokens literais para colchetes
 %token '[' ']'
 
 %nonassoc '<' '>' ME MA IG DI
@@ -665,9 +672,9 @@ void liberar_ast(No *no) {
 %left '*' '/'
 
 %type <no> valor calcula instrucao declaracao atribuicao entrada escreve programa bloco
-%type <no> condicao if_instrucao while_instrucao acesso_array // declaracao_array removido, pois já está em 'declaracao'
+%type <no> condicao if_instrucao while_instrucao acesso_array
 %type <lista_nos> argumentos
-%type <no> lvalue // Novo tipo para representar o lado esquerdo de uma atribuição
+%type <no> lvalue
 
 %%
 
@@ -719,8 +726,8 @@ valor: NUMERO                      { $$ = novo_numero($1); }
 escreve: PRINT '(' argumentos ')'  { $$ = novo_impressao($3); }
     ;
 
-argumentos: valor ',' argumentos   { $$ = nova_lista_nos($1, $3); }
-          | valor                  { $$ = nova_lista_nos($1, NULL); }
+argumentos: calcula ',' argumentos   { $$ = nova_lista_nos($1, $3); }
+          | calcula                  { $$ = nova_lista_nos($1, NULL); }
           ;
 
 declaracao: TIPO VAR '=' calcula     { $$ = novo_declaracao($1, $2, $4); }
@@ -745,10 +752,23 @@ acesso_array: VAR '[' calcula ']'  { $$ = novo_acesso_array($1, $3); }
 
 #include "lex.yy.c"
 
-int main() {
-    FILE *codigo = fopen("entrada.rag", "r");
+int main(int argc, char **argv) {
+    if (argc < 2) {
+        fprintf(stderr, "Uso: %s <nome_arquivo.rag>\n", argv[0]);
+        return 1;
+    }
+
+    char *arquivo = argv[1];
+    char *extansao = strrchr(arquivo, '.');
+
+    if (!extansao || strcmp(extansao, ".rag") != 0) {
+        fprintf(stderr, "Erro: O arquivo de entrada deve ter a extensão '.rag'.\n");
+        return 1;
+    }
+
+    FILE *codigo = fopen(arquivo, "r");
     if (!codigo) {
-        perror("Erro ao abrir 'entrada.rag'");
+        perror("Erro ao abrir o arquivo");
         return 1;
     }
     yyin = codigo;
