@@ -409,7 +409,7 @@ double avaliar_expressao(No *no) {
 
             double indice_val = avaliar_expressao(no->acesso_array.indice);
             if (indice_val < 0 || fmod(indice_val, 1.0) != 0 || indice_val >= array_var->valor.array_info.tamanho) {
-                fprintf(stderr, "Erro na linha %d: Índice de array fora dos limites para '%s'. Índice: %.0f, Tamanho: %d.\n", yylineno, array_var->nome, indice_val, array_var->valor.array_info.tamanho);
+                fprintf(stderr, "Erro na linha %d: Índice de array fora dos limites para '%s'. Índice: %.1f, Tamanho: %d.\n", yylineno, array_var->nome, indice_val, array_var->valor.array_info.tamanho);
                 return 0;
             }
             int indice = (int)indice_val;
@@ -492,7 +492,7 @@ void executar(No *no) {
 
                 double indice_val = avaliar_expressao(indice_node);
                 if (indice_val < 0 || fmod(indice_val, 1.0) != 0 || indice_val >= array_var->valor.array_info.tamanho) {
-                    fprintf(stderr, "Erro na linha %d: Índice de array fora dos limites para '%s'. Índice: %.0f, Tamanho: %d.\n", yylineno, array_var->nome, indice_val, array_var->valor.array_info.tamanho);
+                    fprintf(stderr, "Erro na linha %d: Índice de array fora dos limites para '%s'. Índice: %.1f, Tamanho: %d.\n", yylineno, array_var->nome, indice_val, array_var->valor.array_info.tamanho);
                     return;
                 }
                 int indice = (int)indice_val;
@@ -528,7 +528,7 @@ void executar(No *no) {
                     Variavel *v = buscar_variavel(arg->no->variavel.nome);
                     if (v) {
                         if (strcmp(v->tipo, "NUM") == 0) {
-                            printf("%.0f", v->valor.valor_numerico);
+                            printf("%.1f", v->valor.valor_numerico);
                         } else if (strcmp(v->tipo, "STR") == 0) {
                             printf("%s", v->valor.valor_texto);
                         } else {
@@ -538,11 +538,11 @@ void executar(No *no) {
                          fprintf(stderr, "Erro na linha %d: Variável '%s' não declarada para impressão.\n", yylineno, arg->no->variavel.nome);
                     }
                 } else if (arg->no->tipo == AST_NUMERO) {
-                    printf("%.0f", arg->no->numero.valor);
+                    printf("%.1f", arg->no->numero.valor);
                 } else if (arg->no->tipo == AST_TEXTO) {
                     printf("%s", arg->no->texto.valor);
                 } else if (arg->no->tipo == AST_OP_BINARIA) {
-                    printf("%.0f", avaliar_expressao(arg->no));
+                    printf("%.1f", avaliar_expressao(arg->no));
                 } else if (arg->no->tipo == AST_ACESSO_ARRAY) {
                     Variavel *array_var = buscar_variavel(arg->no->acesso_array.nome_array);
                     if (!array_var) {
@@ -559,7 +559,7 @@ void executar(No *no) {
                     int indice = (int)indice_val;
 
                     if (strcmp(array_var->valor.array_info.tipo_base, "NUM") == 0) {
-                        printf("%.0f", ((double *)array_var->valor.array_info.elementos)[indice]);
+                        printf("%.1f", ((double *)array_var->valor.array_info.elementos)[indice]);
                     } else if (strcmp(array_var->valor.array_info.tipo_base, "STR") == 0) {
                         printf("%s", ((char **)array_var->valor.array_info.elementos)[indice]);
                     }
@@ -627,7 +627,7 @@ void executar(No *no) {
         
                 double indice_val = avaliar_expressao(indice_node);
                 if (indice_val < 0 || fmod(indice_val, 1.0) != 0 || indice_val >= array_var->valor.array_info.tamanho) {
-                    fprintf(stderr, "Erro na linha %d: Índice de array fora dos limites para '%s'. Índice: %.0f, Tamanho: %d.\n", yylineno, array_var->nome, indice_val, array_var->valor.array_info.tamanho);
+                    fprintf(stderr, "Erro na linha %d: Índice de array fora dos limites para '%s'. Índice: %.1f, Tamanho: %d.\n", yylineno, array_var->nome, indice_val, array_var->valor.array_info.tamanho);
                     return;
                 }
                 int indice = (int)indice_val;
