@@ -1,8 +1,8 @@
-NUM notaF
-NUM nota1
-NUM nota2
-NUM peso1 = 2
-NUM peso2 = 3
+num notaF
+num nota1
+num nota2
+num peso1 = 2
+num peso2 = 3
 
 print("insira a primeira nota: ")
 stdin('%i', nota1)
@@ -10,6 +10,6 @@ stdin('%i', nota1)
 print("insira a segunda nota: ")
 stdin('%i', nota2)
 
-notaF = ((nota1 * peso1) + (nota2 * peso2))
+notaF = (nota1 * peso1) + (nota2 * peso2) / (peso1 + peso2)
 
 print(notaF)

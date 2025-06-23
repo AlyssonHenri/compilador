@@ -1187,7 +1187,7 @@ union yyalloc
 /* YYFINAL -- State number of the termination state.  */
 #define YYFINAL  3
 /* YYLAST -- Last index in YYTABLE.  */
-#define YYLAST   140
+#define YYLAST   155
 
 /* YYNTOKENS -- Number of terminals.  */
 #define YYNTOKENS  31
@@ -1295,17 +1295,17 @@ yysymbol_name (yysymbol_kind_t yysymbol)
 
 /* YYPACT[STATE-NUM] -- Index in YYTABLE of the portion describing
    STATE-NUM.  */
-static const yytype_int8 yypact[] =
+static const yytype_int16 yypact[] =
 {
-     -68,    22,    85,   -68,    -1,    16,    18,    19,    -6,     8,
-     -68,   -68,    95,   -68,   -68,   -68,    38,   -68,   -68,   -68,
-      15,   -68,   -68,    27,    95,    37,    95,    95,    10,    95,
-      36,   -18,   -68,    23,    23,    23,    23,    95,   100,    40,
-      39,    43,    94,    44,    95,    95,   109,   -68,   -68,   -68,
-     -68,   -68,    38,    95,   -68,    61,    58,    95,    95,    95,
-      95,    95,    95,    59,   116,    38,   -68,   -68,    65,   -68,
-      38,    38,    38,    38,    38,    38,   -68,   -68,   -68,     7,
-      51,    81,   -68,    67,   -68,    68,   -68
+     -68,    10,   102,   -68,   -13,    -6,     4,    11,     1,   -10,
+     -68,   -68,    14,   -68,   -68,   -68,    38,   -68,   -68,   -68,
+       5,   -68,   -68,     7,    14,    23,    14,    14,    -9,    14,
+      24,   129,   -68,    14,    14,    14,    14,    14,   -18,    17,
+      15,    19,   111,    26,    14,    14,   118,   -68,     8,     8,
+     -68,   -68,    38,    14,   -68,    27,    30,    14,    14,    14,
+      14,    14,    14,    39,   125,    38,   -68,   -68,    42,   -68,
+      38,    38,    38,    38,    38,    38,   -68,   -68,   -68,    51,
+      68,    47,   -68,    43,   -68,    85,   -68
 };
 
 /* YYDEFACT[STATE-NUM] -- Default reduction number in state STATE-NUM.
@@ -1314,11 +1314,11 @@ static const yytype_int8 yypact[] =
 static const yytype_int8 yydefact[] =
 {
        3,     0,     2,     1,     0,     0,     0,     0,     0,    28,
-      29,    27,     0,     4,    10,    11,     5,    21,     6,     7,
+      29,    27,     0,     4,    10,    11,     5,    26,     6,     7,
        0,     8,     9,    30,     0,     0,     0,     0,    35,     0,
       28,     0,    30,     0,     0,     0,     0,     0,    33,     0,
-       0,     0,     0,     0,     0,     0,     0,    26,    22,    23,
-      24,    25,    39,     0,    31,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,    25,    21,    22,
+      23,    24,    39,     0,    31,     0,     0,     0,     0,     0,
        0,     0,     0,     0,     0,    34,    41,    32,     0,     3,
       17,    18,    19,    20,    15,    16,     3,    36,    40,     0,
        0,    12,    14,     0,     3,     0,    13
@@ -1327,8 +1327,8 @@ static const yytype_int8 yydefact[] =
 /* YYPGOTO[NTERM-NUM].  */
 static const yytype_int8 yypgoto[] =
 {
-     -68,   -68,   -67,   -68,   -68,   -68,    73,   -11,    -5,   -68,
-      42,   -68,   -68,   -68,   -68,    -2
+     -68,   -68,   -67,   -68,   -68,   -68,    58,   -11,   -68,   -68,
+      16,   -68,   -68,   -68,   -68,    -2
 };
 
 /* YYDEFGOTO[NTERM-NUM].  */
@@ -1343,40 +1343,42 @@ static const yytype_int8 yydefgoto[] =
    number is the opposite.  If YYTABLE_NINF, syntax error.  */
 static const yytype_int8 yytable[] =
 {
-      23,    31,    79,    33,    34,    35,    36,    28,    47,    80,
-       4,     5,     6,    38,     7,    42,    42,    85,    46,     8,
-       9,    10,     3,    11,    24,    29,    52,    44,    48,    49,
-      50,    51,    12,    64,    65,    81,    30,    10,   -37,    11,
-      45,    25,    38,    26,    27,    37,    70,    71,    72,    73,
-      74,    75,    40,    29,     4,     5,     6,   -38,     7,    33,
-      34,    35,    36,     8,     9,    10,    54,    11,    55,    56,
-      63,     4,     5,     6,    68,     7,    12,    23,    23,    82,
-       8,     9,    10,    23,    11,    69,    76,    83,     4,     5,
-       6,    78,     7,    12,    84,    67,    86,     8,     9,    10,
-      43,    11,    57,    58,    59,    60,     0,     0,    30,    10,
-      12,    11,     0,    61,    62,    33,    34,    35,    36,     0,
-      12,    33,    34,    35,    36,     0,     0,    66,     0,    53,
-      33,    34,    35,    36,    77,     0,     0,    33,    34,    35,
-      36
+      23,    31,    79,    33,    34,    35,    36,    29,    44,    80,
+       3,    53,    24,    38,    28,    42,    42,    85,    46,    25,
+     -37,    45,    48,    49,    50,    51,    52,    30,    10,    26,
+      11,    35,    36,    64,    65,    37,    27,   -38,    40,    12,
+      68,    29,    38,    54,    55,    56,    70,    71,    72,    73,
+      74,    75,    63,    83,     4,     5,     6,    69,     7,    33,
+      34,    35,    36,     8,     9,    10,    76,    11,    78,    67,
+      84,     4,     5,     6,     0,     7,    12,    23,    23,    81,
+       8,     9,    10,    23,    11,    43,     0,     0,     4,     5,
+       6,     0,     7,    12,     0,     0,    82,     8,     9,    10,
+       0,    11,     0,     0,     0,     4,     5,     6,     0,     7,
+      12,     0,     0,    86,     8,     9,    10,     0,    11,    57,
+      58,    59,    60,     0,     0,     0,     0,    12,     0,     0,
+      61,    62,    33,    34,    35,    36,    66,     0,     0,    33,
+      34,    35,    36,    77,     0,     0,    33,    34,    35,    36,
+      33,    34,    35,    36,     0,    47
 };
 
 static const yytype_int8 yycheck[] =
 {
-       2,    12,    69,    21,    22,    23,    24,    13,    26,    76,
-       3,     4,     5,    24,     7,    26,    27,    84,    29,    12,
-      13,    14,     0,    16,    25,    17,    37,    17,    33,    34,
-      35,    36,    25,    44,    45,    28,    13,    14,    30,    16,
-      30,    25,    53,    25,    25,    30,    57,    58,    59,    60,
-      61,    62,    15,    17,     3,     4,     5,    30,     7,    21,
-      22,    23,    24,    12,    13,    14,    26,    16,    29,    26,
-      26,     3,     4,     5,    13,     7,    25,    79,    80,    28,
-      12,    13,    14,    85,    16,    27,    27,     6,     3,     4,
-       5,    26,     7,    25,    27,    53,    28,    12,    13,    14,
-      27,    16,     8,     9,    10,    11,    -1,    -1,    13,    14,
-      25,    16,    -1,    19,    20,    21,    22,    23,    24,    -1,
-      25,    21,    22,    23,    24,    -1,    -1,    18,    -1,    29,
-      21,    22,    23,    24,    18,    -1,    -1,    21,    22,    23,
-      24
+       2,    12,    69,    21,    22,    23,    24,    17,    17,    76,
+       0,    29,    25,    24,    13,    26,    27,    84,    29,    25,
+      30,    30,    33,    34,    35,    36,    37,    13,    14,    25,
+      16,    23,    24,    44,    45,    30,    25,    30,    15,    25,
+      13,    17,    53,    26,    29,    26,    57,    58,    59,    60,
+      61,    62,    26,     6,     3,     4,     5,    27,     7,    21,
+      22,    23,    24,    12,    13,    14,    27,    16,    26,    53,
+      27,     3,     4,     5,    -1,     7,    25,    79,    80,    28,
+      12,    13,    14,    85,    16,    27,    -1,    -1,     3,     4,
+       5,    -1,     7,    25,    -1,    -1,    28,    12,    13,    14,
+      -1,    16,    -1,    -1,    -1,     3,     4,     5,    -1,     7,
+      25,    -1,    -1,    28,    12,    13,    14,    -1,    16,     8,
+       9,    10,    11,    -1,    -1,    -1,    -1,    25,    -1,    -1,
+      19,    20,    21,    22,    23,    24,    18,    -1,    -1,    21,
+      22,    23,    24,    18,    -1,    -1,    21,    22,    23,    24,
+      21,    22,    23,    24,    -1,    26
 };
 
 /* YYSTOS[STATE-NUM] -- The symbol kind of the accessing symbol of
@@ -1387,8 +1389,8 @@ static const yytype_int8 yystos[] =
       14,    16,    25,    34,    35,    36,    38,    39,    40,    42,
       43,    44,    45,    46,    25,    25,    25,    25,    13,    17,
       13,    38,    46,    21,    22,    23,    24,    30,    38,    41,
-      15,    37,    38,    37,    17,    30,    38,    26,    39,    39,
-      39,    39,    38,    29,    26,    29,    26,     8,     9,    10,
+      15,    37,    38,    37,    17,    30,    38,    26,    38,    38,
+      38,    38,    38,    29,    26,    29,    26,     8,     9,    10,
       11,    19,    20,    26,    38,    38,    18,    41,    13,    27,
       38,    38,    38,    38,    38,    38,    27,    18,    26,    33,
       33,    28,    28,     6,    27,    33,    28
@@ -1409,7 +1411,7 @@ static const yytype_int8 yyr2[] =
 {
        0,     2,     1,     0,     2,     1,     1,     1,     1,     1,
        1,     1,     7,    11,     7,     3,     3,     3,     3,     3,
-       3,     1,     3,     3,     3,     3,     3,     1,     1,     1,
+       3,     3,     3,     3,     3,     3,     1,     1,     1,     1,
        1,     4,     3,     1,     4,     2,     5,     1,     1,     3,
        6,     4
 };
@@ -1877,239 +1879,245 @@ yyreduce:
   case 2: /* programa: bloco  */
 #line 681 "sintatico.y"
                 { executar((yyvsp[0].no)); liberar_ast((yyvsp[0].no)); liberar_tabela_simbolos(); }
-#line 1881 "sintatico.tab.c"
+#line 1883 "sintatico.tab.c"
     break;
 
   case 3: /* bloco: %empty  */
 #line 684 "sintatico.y"
                        { (yyval.no) = NULL; }
-#line 1887 "sintatico.tab.c"
+#line 1889 "sintatico.tab.c"
     break;
 
   case 4: /* bloco: bloco instrucao  */
 #line 685 "sintatico.y"
                        { (yyval.no) = ((yyvsp[-1].no) == NULL) ? (yyvsp[0].no) : novo_op_binaria(';', (yyvsp[-1].no), (yyvsp[0].no)); }
-#line 1893 "sintatico.tab.c"
+#line 1895 "sintatico.tab.c"
     break;
 
   case 5: /* instrucao: calcula  */
 #line 688 "sintatico.y"
                                    { (yyval.no) = (yyvsp[0].no); }
-#line 1899 "sintatico.tab.c"
+#line 1901 "sintatico.tab.c"
     break;
 
   case 6: /* instrucao: escreve  */
 #line 689 "sintatico.y"
                                    { (yyval.no) = (yyvsp[0].no); }
-#line 1905 "sintatico.tab.c"
+#line 1907 "sintatico.tab.c"
     break;
 
   case 7: /* instrucao: declaracao  */
 #line 690 "sintatico.y"
                                    { (yyval.no) = (yyvsp[0].no); }
-#line 1911 "sintatico.tab.c"
+#line 1913 "sintatico.tab.c"
     break;
 
   case 8: /* instrucao: atribuicao  */
 #line 691 "sintatico.y"
                                    { (yyval.no) = (yyvsp[0].no); }
-#line 1917 "sintatico.tab.c"
+#line 1919 "sintatico.tab.c"
     break;
 
   case 9: /* instrucao: entrada  */
 #line 692 "sintatico.y"
                                    { (yyval.no) = (yyvsp[0].no); }
-#line 1923 "sintatico.tab.c"
+#line 1925 "sintatico.tab.c"
     break;
 
   case 10: /* instrucao: if_instrucao  */
 #line 693 "sintatico.y"
                                    { (yyval.no) = (yyvsp[0].no); }
-#line 1929 "sintatico.tab.c"
+#line 1931 "sintatico.tab.c"
     break;
 
   case 11: /* instrucao: while_instrucao  */
 #line 694 "sintatico.y"
                                    { (yyval.no) = (yyvsp[0].no); }
-#line 1935 "sintatico.tab.c"
+#line 1937 "sintatico.tab.c"
     break;
 
   case 12: /* if_instrucao: IF '(' condicao ')' '{' bloco '}'  */
 #line 697 "sintatico.y"
                                                                 { (yyval.no) = novo_se((yyvsp[-4].no), (yyvsp[-1].no), NULL); }
-#line 1941 "sintatico.tab.c"
+#line 1943 "sintatico.tab.c"
     break;
 
   case 13: /* if_instrucao: IF '(' condicao ')' '{' bloco '}' ELSE '{' bloco '}'  */
 #line 698 "sintatico.y"
                                                                    { (yyval.no) = novo_se((yyvsp[-8].no), (yyvsp[-5].no), (yyvsp[-1].no)); }
-#line 1947 "sintatico.tab.c"
+#line 1949 "sintatico.tab.c"
     break;
 
   case 14: /* while_instrucao: WHILE '(' condicao ')' '{' bloco '}'  */
 #line 701 "sintatico.y"
                                                                { (yyval.no) = novo_enquanto((yyvsp[-4].no), (yyvsp[-1].no)); }
-#line 1953 "sintatico.tab.c"
+#line 1955 "sintatico.tab.c"
     break;
 
   case 15: /* condicao: calcula '<' calcula  */
 #line 704 "sintatico.y"
                                    { (yyval.no) = novo_op_binaria('<', (yyvsp[-2].no), (yyvsp[0].no)); }
-#line 1959 "sintatico.tab.c"
+#line 1961 "sintatico.tab.c"
     break;
 
   case 16: /* condicao: calcula '>' calcula  */
 #line 705 "sintatico.y"
                                    { (yyval.no) = novo_op_binaria('>', (yyvsp[-2].no), (yyvsp[0].no)); }
-#line 1965 "sintatico.tab.c"
+#line 1967 "sintatico.tab.c"
     break;
 
   case 17: /* condicao: calcula ME calcula  */
 #line 706 "sintatico.y"
                                    { (yyval.no) = novo_op_binaria('E', (yyvsp[-2].no), (yyvsp[0].no)); }
-#line 1971 "sintatico.tab.c"
+#line 1973 "sintatico.tab.c"
     break;
 
   case 18: /* condicao: calcula MA calcula  */
 #line 707 "sintatico.y"
                                    { (yyval.no) = novo_op_binaria('A', (yyvsp[-2].no), (yyvsp[0].no)); }
-#line 1977 "sintatico.tab.c"
+#line 1979 "sintatico.tab.c"
     break;
 
   case 19: /* condicao: calcula IG calcula  */
 #line 708 "sintatico.y"
                                    { (yyval.no) = novo_op_binaria('I', (yyvsp[-2].no), (yyvsp[0].no)); }
-#line 1983 "sintatico.tab.c"
+#line 1985 "sintatico.tab.c"
     break;
 
   case 20: /* condicao: calcula DI calcula  */
 #line 709 "sintatico.y"
                                    { (yyval.no) = novo_op_binaria('D', (yyvsp[-2].no), (yyvsp[0].no)); }
-#line 1989 "sintatico.tab.c"
+#line 1991 "sintatico.tab.c"
     break;
 
-  case 22: /* calcula: calcula '+' valor  */
-#line 713 "sintatico.y"
+  case 21: /* calcula: calcula '+' calcula  */
+#line 712 "sintatico.y"
                                    { (yyval.no) = novo_op_binaria('+', (yyvsp[-2].no), (yyvsp[0].no)); }
-#line 1995 "sintatico.tab.c"
+#line 1997 "sintatico.tab.c"
     break;
 
-  case 23: /* calcula: calcula '-' valor  */
-#line 714 "sintatico.y"
+  case 22: /* calcula: calcula '-' calcula  */
+#line 713 "sintatico.y"
                                    { (yyval.no) = novo_op_binaria('-', (yyvsp[-2].no), (yyvsp[0].no)); }
-#line 2001 "sintatico.tab.c"
+#line 2003 "sintatico.tab.c"
     break;
 
-  case 24: /* calcula: calcula '*' valor  */
-#line 715 "sintatico.y"
+  case 23: /* calcula: calcula '*' calcula  */
+#line 714 "sintatico.y"
                                    { (yyval.no) = novo_op_binaria('*', (yyvsp[-2].no), (yyvsp[0].no)); }
-#line 2007 "sintatico.tab.c"
+#line 2009 "sintatico.tab.c"
     break;
 
-  case 25: /* calcula: calcula '/' valor  */
-#line 716 "sintatico.y"
+  case 24: /* calcula: calcula '/' calcula  */
+#line 715 "sintatico.y"
                                    { (yyval.no) = novo_op_binaria('/', (yyvsp[-2].no), (yyvsp[0].no)); }
-#line 2013 "sintatico.tab.c"
+#line 2015 "sintatico.tab.c"
     break;
 
-  case 26: /* calcula: '(' calcula ')'  */
-#line 717 "sintatico.y"
+  case 25: /* calcula: '(' calcula ')'  */
+#line 716 "sintatico.y"
                                    { (yyval.no) = (yyvsp[-1].no); }
-#line 2019 "sintatico.tab.c"
+#line 2021 "sintatico.tab.c"
+    break;
+
+  case 26: /* calcula: valor  */
+#line 717 "sintatico.y"
+                                   { (yyval.no) = (yyvsp[0].no); }
+#line 2027 "sintatico.tab.c"
     break;
 
   case 27: /* valor: NUMERO  */
 #line 720 "sintatico.y"
                                    { (yyval.no) = novo_numero((yyvsp[0].valor_numerico)); }
-#line 2025 "sintatico.tab.c"
+#line 2033 "sintatico.tab.c"
     break;
 
   case 28: /* valor: VAR  */
 #line 721 "sintatico.y"
                                    { (yyval.no) = novo_variavel((yyvsp[0].valor_texto)); }
-#line 2031 "sintatico.tab.c"
+#line 2039 "sintatico.tab.c"
     break;
 
   case 29: /* valor: STRING  */
 #line 722 "sintatico.y"
                                    { (yyval.no) = novo_texto((yyvsp[0].valor_texto)); }
-#line 2037 "sintatico.tab.c"
+#line 2045 "sintatico.tab.c"
     break;
 
   case 30: /* valor: acesso_array  */
 #line 723 "sintatico.y"
                                    { (yyval.no) = (yyvsp[0].no); }
-#line 2043 "sintatico.tab.c"
+#line 2051 "sintatico.tab.c"
     break;
 
   case 31: /* escreve: PRINT '(' argumentos ')'  */
 #line 726 "sintatico.y"
                                    { (yyval.no) = novo_impressao((yyvsp[-1].lista_nos)); }
-#line 2049 "sintatico.tab.c"
+#line 2057 "sintatico.tab.c"
     break;
 
   case 32: /* argumentos: calcula ',' argumentos  */
 #line 729 "sintatico.y"
                                      { (yyval.lista_nos) = nova_lista_nos((yyvsp[-2].no), (yyvsp[0].lista_nos)); }
-#line 2055 "sintatico.tab.c"
+#line 2063 "sintatico.tab.c"
     break;
 
   case 33: /* argumentos: calcula  */
 #line 730 "sintatico.y"
                                      { (yyval.lista_nos) = nova_lista_nos((yyvsp[0].no), NULL); }
-#line 2061 "sintatico.tab.c"
+#line 2069 "sintatico.tab.c"
     break;
 
   case 34: /* declaracao: TIPO VAR '=' calcula  */
 #line 733 "sintatico.y"
                                      { (yyval.no) = novo_declaracao((yyvsp[-3].valor_texto), (yyvsp[-2].valor_texto), (yyvsp[0].no)); }
-#line 2067 "sintatico.tab.c"
+#line 2075 "sintatico.tab.c"
     break;
 
   case 35: /* declaracao: TIPO VAR  */
 #line 734 "sintatico.y"
                                      { (yyval.no) = novo_declaracao((yyvsp[-1].valor_texto), (yyvsp[0].valor_texto), NULL); }
-#line 2073 "sintatico.tab.c"
+#line 2081 "sintatico.tab.c"
     break;
 
   case 36: /* declaracao: TIPO VAR '[' calcula ']'  */
 #line 735 "sintatico.y"
                                      { (yyval.no) = novo_declaracao_array((yyvsp[-4].valor_texto), (yyvsp[-3].valor_texto), (yyvsp[-1].no)); }
-#line 2079 "sintatico.tab.c"
+#line 2087 "sintatico.tab.c"
     break;
 
   case 37: /* lvalue: VAR  */
 #line 738 "sintatico.y"
                                    { (yyval.no) = novo_variavel((yyvsp[0].valor_texto)); }
-#line 2085 "sintatico.tab.c"
+#line 2093 "sintatico.tab.c"
     break;
 
   case 38: /* lvalue: acesso_array  */
 #line 739 "sintatico.y"
                                    { (yyval.no) = (yyvsp[0].no); }
-#line 2091 "sintatico.tab.c"
+#line 2099 "sintatico.tab.c"
     break;
 
   case 39: /* atribuicao: lvalue '=' calcula  */
 #line 742 "sintatico.y"
                                    { (yyval.no) = novo_atribuicao((yyvsp[-2].no), (yyvsp[0].no)); }
-#line 2097 "sintatico.tab.c"
+#line 2105 "sintatico.tab.c"
     break;
 
   case 40: /* entrada: STDIN '(' MASCARA ',' VAR ')'  */
 #line 745 "sintatico.y"
                                        { (yyval.no) = novo_entrada((yyvsp[-3].valor_texto), (yyvsp[-1].valor_texto)); }
-#line 2103 "sintatico.tab.c"
+#line 2111 "sintatico.tab.c"
     break;
 
   case 41: /* acesso_array: VAR '[' calcula ']'  */
 #line 748 "sintatico.y"
                                    { (yyval.no) = novo_acesso_array((yyvsp[-3].valor_texto), (yyvsp[-1].no)); }
-#line 2109 "sintatico.tab.c"
+#line 2117 "sintatico.tab.c"
     break;
 
 
-#line 2113 "sintatico.tab.c"
+#line 2121 "sintatico.tab.c"
 
       default: break;
     }

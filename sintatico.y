@@ -709,12 +709,12 @@ condicao: calcula '<' calcula      { $$ = novo_op_binaria('<', $1, $3); }
         | calcula DI calcula       { $$ = novo_op_binaria('D', $1, $3); } // !=
         ;
 
-calcula: valor
-       | calcula '+' valor         { $$ = novo_op_binaria('+', $1, $3); }
-       | calcula '-' valor         { $$ = novo_op_binaria('-', $1, $3); }
-       | calcula '*' valor         { $$ = novo_op_binaria('*', $1, $3); }
-       | calcula '/' valor         { $$ = novo_op_binaria('/', $1, $3); }
+calcula: calcula '+' calcula       { $$ = novo_op_binaria('+', $1, $3); }
+       | calcula '-' calcula       { $$ = novo_op_binaria('-', $1, $3); }
+       | calcula '*' calcula       { $$ = novo_op_binaria('*', $1, $3); }
+       | calcula '/' calcula       { $$ = novo_op_binaria('/', $1, $3); }
        | '(' calcula ')'           { $$ = $2; }
+       | valor                     { $$ = $1; }
        ;
 
 valor: NUMERO                      { $$ = novo_numero($1); }
