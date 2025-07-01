@@ -63,11 +63,12 @@ extern int yydebug;
     MA = 264,                      /* MA  */
     IG = 265,                      /* IG  */
     DI = 266,                      /* DI  */
-    TIPO = 267,                    /* TIPO  */
-    VAR = 268,                     /* VAR  */
-    STRING = 269,                  /* STRING  */
-    MASCARA = 270,                 /* MASCARA  */
-    NUMERO = 271                   /* NUMERO  */
+    FOR = 267,                     /* FOR  */
+    TIPO = 268,                    /* TIPO  */
+    VAR = 269,                     /* VAR  */
+    STRING = 270,                  /* STRING  */
+    MASCARA = 271,                 /* MASCARA  */
+    NUMERO = 272                   /* NUMERO  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -76,14 +77,14 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 656 "sintatico.y"
+#line 741 "sintatico.y"
 
     double valor_numerico;
     char *valor_texto;
     No *no;
     ListaNos *lista_nos;
 
-#line 87 "sintatico.tab.h"
+#line 88 "sintatico.tab.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

@@ -14,7 +14,7 @@ extern FILE *yyin;
 typedef enum {
     AST_OP_BINARIA, AST_NUMERO, AST_TEXTO, AST_VARIAVEL,
     AST_DECLARACAO, AST_ATRIBUICAO, AST_IMPRESSAO, AST_ENTRADA,
-    AST_IF, AST_WHILE, AST_DECLARACAO_ARRAY, AST_ACESSO_ARRAY
+    AST_IF, AST_WHILE, AST_DECLARACAO_ARRAY, AST_ACESSO_ARRAY, AST_FOR
 } TipoNo;
 
 typedef struct No {
@@ -30,6 +30,7 @@ typedef struct No {
         struct { char *mascara; struct No *destino; } entrada;
         struct { struct No *condicao; struct No *bloco_then; struct No *bloco_else; } se;
         struct { struct No *condicao; struct No *bloco_fazer; } enquanto;
+        struct { struct No *inicializacao; struct No *condicao; struct No *incremento; struct No *bloco_fazer; } loop_for;
         struct { char *tipo_base; char *nome; struct No *tamanho; } declaracao_array;
         struct { char *nome_array; struct No *indice; } acesso_array;
     };
@@ -69,6 +70,7 @@ No *novo_impressao(ListaNos *argumentos);
 No *novo_entrada(char *mascara, No *destino);
 No *novo_se(No *condicao, No *bloco_then, No *bloco_else);
 No *novo_enquanto(No *condicao, No *bloco_fazer);
+No *novo_for(No *inicializacao, No *condicao, No *incremento, No *bloco_fazer);
 No *novo_declaracao_array(char *tipo_base, char *nome, No *tamanho);
 No *novo_acesso_array(char *nome_array, No *indice);
 ListaNos *nova_lista_nos(No *no, ListaNos *proximo);
@@ -145,6 +147,7 @@ No *novo_declaracao(char *tipo, char *nome, No *inicializacao) {
     n->declaracao.tipo = strdup(tipo_mod);
     n->declaracao.nome = strdup(nome);
     n->declaracao.inicializacao = inicializacao;
+    free(tipo_mod);
     return n;
 }
 
@@ -185,6 +188,17 @@ No *novo_enquanto(No *condicao, No *bloco_fazer) {
     return n;
 }
 
+No *novo_for(No *inicializacao, No *condicao, No *incremento, No *bloco_fazer) {
+    No *n = malloc(sizeof(No));
+    if (!n) { perror("Erro ao alocar novo_for"); exit(1); }
+    n->tipo = AST_FOR;
+    n->loop_for.inicializacao = inicializacao;
+    n->loop_for.condicao = condicao;
+    n->loop_for.incremento = incremento;
+    n->loop_for.bloco_fazer = bloco_fazer;
+    return n;
+}
+
 No *novo_declaracao_array(char *tipo_base, char *nome, No *tamanho) {
     No *n = malloc(sizeof(No));
     if (!n) { perror("Erro ao alocar novo_declaracao_array"); exit(1); }
@@ -196,6 +210,7 @@ No *novo_declaracao_array(char *tipo_base, char *nome, No *tamanho) {
     n->declaracao_array.tipo_base = strdup(tipo_mod);
     n->declaracao_array.nome = strdup(nome);
     n->declaracao_array.tamanho = tamanho;
+    free(tipo_mod);
     return n;
 }
 
@@ -258,7 +273,7 @@ void inserir_array(char *tipo_base_str, char *nome, No *tamanho_no) {
         fprintf(stderr, "Erro na linha %d: Tamanho de array inválido para '%s'. Deve ser um inteiro positivo.\n", yylineno, nome);
         return;
     }
-    int tamanho = (int)tamanho_val+1;
+    int tamanho = (int)tamanho_val;
 
     Variavel *v = malloc(sizeof(Variavel));
     if (!v) { perror("Erro ao alocar Variavel para array"); exit(1); }
@@ -333,8 +348,8 @@ double avaliar_expressao(No *no) {
                 return 0;
             }
             if (strcmp(array_var->tipo, "NUM_ARRAY") != 0 && strcmp(array_var->tipo, "STR_ARRAY") != 0) {
-                 fprintf(stderr, "Erro na linha %d: Variável '%s' não é um array.\n", yylineno, no->acesso_array.nome_array);
-                 return 0;
+                     fprintf(stderr, "Erro na linha %d: Variável '%s' não é um array.\n", yylineno, no->acesso_array.nome_array);
+                     return 0;
             }
 
             double indice_val = avaliar_expressao(no->acesso_array.indice);
@@ -435,13 +450,13 @@ void executar(No *no) {
                         free(((char **)array_var->valor.array_info.elementos)[indice]);
                         ((char **)array_var->valor.array_info.elementos)[indice] = strdup(no->atribuicao.valor->texto.valor);
                     } else if (no->atribuicao.valor->tipo == AST_VARIAVEL) {
-                         Variavel *orig_var = buscar_variavel(no->atribuicao.valor->variavel.nome);
-                         if (orig_var && strcmp(orig_var->tipo, "STR") == 0) {
-                             free(((char **)array_var->valor.array_info.elementos)[indice]);
-                             ((char **)array_var->valor.array_info.elementos)[indice] = strdup(orig_var->valor.valor_texto);
-                         } else {
-                             fprintf(stderr, "Erro na linha %d: Atribuição de tipo incompatível para array de strings.\n", yylineno);
-                         }
+                             Variavel *orig_var = buscar_variavel(no->atribuicao.valor->variavel.nome);
+                             if (orig_var && strcmp(orig_var->tipo, "STR") == 0) {
+                                 free(((char **)array_var->valor.array_info.elementos)[indice]);
+                                 ((char **)array_var->valor.array_info.elementos)[indice] = strdup(orig_var->valor.valor_texto);
+                             } else {
+                                 fprintf(stderr, "Erro na linha %d: Atribuição de tipo incompatível para array de strings.\n", yylineno);
+                             }
                     } else {
                         fprintf(stderr, "Erro na linha %d: Atribuição de tipo incompatível para array de strings.\n", yylineno);
                     }
@@ -462,10 +477,10 @@ void executar(No *no) {
                         } else if (strcmp(v->tipo, "STR") == 0) {
                             printf("%s", v->valor.valor_texto);
                         } else {
-                             fprintf(stderr, "Erro na linha %d: Tentativa de imprimir array sem índice: '%s'.\n", yylineno, v->nome);
+                            fprintf(stderr, "Erro na linha %d: Tentativa de imprimir array sem índice: '%s'.\n", yylineno, v->nome);
                         }
                     } else {
-                         fprintf(stderr, "Erro na linha %d: Variável '%s' não declarada para impressão.\n", yylineno, arg->no->variavel.nome);
+                            fprintf(stderr, "Erro na linha %d: Variável '%s' não declarada para impressão.\n", yylineno, arg->no->variavel.nome);
                     }
                 } else if (arg->no->tipo == AST_NUMERO) {
                     printf("%.1f", arg->no->numero.valor);
@@ -612,6 +627,14 @@ void executar(No *no) {
             }
             break;
         }
+        case AST_FOR: {
+            executar(no->loop_for.inicializacao);
+            while (avaliar_expressao(no->loop_for.condicao) != 0) {
+                executar(no->loop_for.bloco_fazer);
+                executar(no->loop_for.incremento);
+            }
+            break;
+        }
         case AST_NUMERO:
         case AST_TEXTO:
         case AST_VARIAVEL:
@@ -686,6 +709,12 @@ void liberar_ast(No *no) {
             liberar_ast(no->enquanto.condicao);
             liberar_ast(no->enquanto.bloco_fazer);
             break;
+        case AST_FOR:
+            liberar_ast(no->loop_for.inicializacao);
+            liberar_ast(no->loop_for.condicao);
+            liberar_ast(no->loop_for.incremento);
+            liberar_ast(no->loop_for.bloco_fazer);
+            break;
         case AST_DECLARACAO_ARRAY:
             free(no->declaracao_array.tipo_base);
             free(no->declaracao_array.nome);
@@ -716,45 +745,55 @@ void liberar_ast(No *no) {
     ListaNos *lista_nos;
 }
 
-%token PRINT STDIN IF ELSE WHILE ME MA IG DI
+%token PRINT STDIN IF ELSE WHILE ME MA IG DI FOR
 %token <valor_texto> TIPO VAR STRING MASCARA
 %token <valor_numerico> NUMERO
 
 %token '[' ']'
 
-%nonassoc '<' '>' ME MA IG DI
+%nonassoc '<' '>' ME MA IG DI ELSE
 %left '+' '-'
 %left '*' '/'
 
-%type <no> valor calcula instrucao declaracao atribuicao entrada escreve programa bloco
-%type <no> condicao if_instrucao while_instrucao acesso_array
+%type <no> valor calcula instrucao declaracao atribuicao entrada escreve programa bloco condicao
+%type <no> if_instrucao while_instrucao acesso_array for_instrucao if_sem_else if_com_else mult_tipo
 %type <lista_nos> argumentos
-%type <no> lvalue
 
 %%
 
 programa: bloco { executar($1); liberar_ast($1); liberar_tabela_simbolos(); }
     ;
 
-bloco:                 { $$ = NULL; }
-     | bloco instrucao { $$ = ($1 == NULL) ? $2 : novo_op_binaria(';', $1, $2); }
-     ;
+bloco:                  { $$ = NULL; }
+      | bloco instrucao { $$ = ($1 == NULL) ? $2 : novo_op_binaria(';', $1, $2); }
+      ;
 
-instrucao: calcula                 { $$ = $1; }
-         | escreve                 { $$ = $1; }
-         | declaracao              { $$ = $1; }
-         | atribuicao              { $$ = $1; }
-         | entrada                 { $$ = $1; }
-         | if_instrucao            { $$ = $1; }
-         | while_instrucao         { $$ = $1; }
-         ;
+instrucao: calcula           { $$ = $1; }
+          | escreve          { $$ = $1; }
+          | declaracao       { $$ = $1; }
+          | atribuicao       { $$ = $1; }
+          | entrada          { $$ = $1; }
+          | if_instrucao     { $$ = $1; }
+          | while_instrucao  { $$ = $1; }
+          | for_instrucao    { $$ = $1; }
+          ;
 
-if_instrucao: IF '(' condicao ')' '{' bloco '}'                 { $$ = novo_se($3, $6, NULL); }
-            | IF '(' condicao ')' '{' bloco '}' ELSE '{' bloco '}' { $$ = novo_se($3, $6, $10); }
+if_sem_else: IF '(' condicao ')' '{' bloco '}'  { $$ = novo_se($3, $6, NULL); }
             ;
 
-while_instrucao: WHILE '(' condicao ')' '{' bloco '}'          { $$ = novo_enquanto($3, $6); }
-               ;
+if_com_else:  IF '(' condicao ')' '{' bloco '}' ELSE if_instrucao    { $$ = novo_se($3, $6, $9); }
+            | IF '(' condicao ')' '{' bloco '}' ELSE '{' bloco '}'    { $$ = novo_se($3, $6, $10); }
+            ;
+
+if_instrucao: if_sem_else
+            | if_com_else
+            ;
+
+while_instrucao: WHILE '(' condicao ')' '{' bloco '}'   { $$ = novo_enquanto($3, $6); }
+                ;
+
+for_instrucao: FOR '(' declaracao ';' condicao ';' atribuicao ')' '{' bloco '}' { $$ = novo_for($3, $5, $7, $10); }
+              ;
 
 condicao: calcula '<' calcula      { $$ = novo_op_binaria('<', $1, $3); }
         | calcula '>' calcula      { $$ = novo_op_binaria('>', $1, $3); }
@@ -765,42 +804,42 @@ condicao: calcula '<' calcula      { $$ = novo_op_binaria('<', $1, $3); }
         ;
 
 calcula: calcula '+' calcula       { $$ = novo_op_binaria('+', $1, $3); }
-       | calcula '-' calcula       { $$ = novo_op_binaria('-', $1, $3); }
-       | calcula '*' calcula       { $$ = novo_op_binaria('*', $1, $3); }
-       | calcula '/' calcula       { $$ = novo_op_binaria('/', $1, $3); }
-       | '(' calcula ')'           { $$ = $2; }
-       | valor                     { $$ = $1; }
-       ;
+        | calcula '-' calcula       { $$ = novo_op_binaria('-', $1, $3); }
+        | calcula '*' calcula       { $$ = novo_op_binaria('*', $1, $3); }
+        | calcula '/' calcula       { $$ = novo_op_binaria('/', $1, $3); }
+        | '(' calcula ')'           { $$ = $2; }
+        | valor                     { $$ = $1; }
+        ;
 
-valor: NUMERO                      { $$ = novo_numero($1); }
-     | VAR                         { $$ = novo_variavel($1); }
-     | STRING                      { $$ = novo_texto($1); }
-     | acesso_array                { $$ = $1; }
-     ;
+valor: NUMERO                       { $$ = novo_numero($1); }
+      | VAR                         { $$ = novo_variavel($1); }
+      | STRING                      { $$ = novo_texto($1); }
+      | acesso_array                { $$ = $1; }
+      ;
 
-escreve: PRINT '(' argumentos ')'  { $$ = novo_impressao($3); }
+escreve: PRINT '(' argumentos ')'   { $$ = novo_impressao($3); }
     ;
 
 argumentos: calcula ',' argumentos   { $$ = nova_lista_nos($1, $3); }
           | calcula                  { $$ = nova_lista_nos($1, NULL); }
           ;
 
-declaracao: TIPO VAR '=' calcula     { $$ = novo_declaracao($1, $2, $4); }
-          | TIPO VAR                 { $$ = novo_declaracao($1, $2, NULL); }
+declaracao: TIPO VAR '=' calcula    { $$ = novo_declaracao($1, $2, $4); }
+          | TIPO VAR                { $$ = novo_declaracao($1, $2, NULL); }
           | TIPO VAR '[' calcula ']' { $$ = novo_declaracao_array($1, $2, $4); }
           ;
 
-lvalue: VAR                        { $$ = novo_variavel($1); }
-      | acesso_array               { $$ = $1; }
-      ;
-
-atribuicao: lvalue '=' calcula     { $$ = novo_atribuicao($1, $3); }
+mult_tipo: VAR                      { $$ = novo_variavel($1); }
+          | acesso_array            { $$ = $1; }
           ;
 
-entrada: STDIN '(' MASCARA ',' lvalue ')' { $$ = novo_entrada($3, $5); }
-       ;
+atribuicao: mult_tipo '=' calcula    { $$ = novo_atribuicao($1, $3); }
+          ;
 
-acesso_array: VAR '[' calcula ']'  { $$ = novo_acesso_array($1, $3); }
+entrada: STDIN '(' MASCARA ',' mult_tipo ')' { $$ = novo_entrada($3, $5); }
+        ;
+
+acesso_array: VAR '[' calcula ']'   { $$ = novo_acesso_array($1, $3); }
             ;
 
 %%
@@ -814,9 +853,9 @@ int main(int argc, char **argv) {
     }
 
     char *arquivo = argv[1];
-    char *extansao = strrchr(arquivo, '.');
+    char *extensao = strrchr(arquivo, '.'); 
 
-    if (!extansao || strcmp(extansao, ".rag") != 0) {
+    if (!extensao || strcmp(extensao, ".rag") != 0) {
         fprintf(stderr, "Erro: O arquivo de entrada deve ter a extensão '.rag'.\n");
         return 1;
     }

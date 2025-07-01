@@ -1,47 +1,77 @@
 num loop = 1
+num opc 
+num notas_total = 0
+num media_final = 0
 
 while(loop != 0){
+    opc = 0
+    print("------------------------------------------")
     print("Selecione qual o tipo de calculo: ")
-    num opc = 0
-    
-    print("1 - Comum")
-    print("2 - Ponderada")
-    stdin("%i", opc)
+    print("1 - Media Aritmetica (Comum)")
+    print("2 - Media Ponderada")
+    print("------------------------------------------")
+
+    stdin('%i', opc)
 
     if(opc == 1){
-        num notas[3]
-        num pesos[2]
 
-        print("insira a primeira nota: ")
-        stdin('%i', notas[0])
+        num notas_aritmetica[2]
 
-        print("insira a segunda nota: ")
-        stdin('%i', notas[1])
+        print("Insira a primeira nota (Numero): ")
+        stdin('%i', notas_aritmetica[0])
 
-        notas[3] = notas[0] + notas[1] / 2
+        print("Insira a segunda nota (Numero): ")
+        stdin('%i', notas_aritmetica[1])
 
-        print("A media é: ", notas[3])
-    } else {
-        num notas[3]
-        num pesos[2]
+        media_final = (notas_aritmetica[0] + notas_aritmetica[1]) / 2
 
-        print("insira a primeira nota: ")
-        stdin('%i', notas[0])
-        print("insira o peso da nota: ")
-        stdin('%i', pesos[0])
 
-        print("insira a segunda nota: ")
-        stdin('%i', notas[1])
-        print("insira o peso da nota: ")
-        stdin('%i', pesos[1])
+    } else if (opc == 2) {
+        print("Insira a quantidade de notas para a media ponderada: ")
+        stdin('%i', notas_total)
 
-        notas[3] = (notas[0] * pesos[0]) + (notas[1] * pesos[1]) / (pesos[0] + pesos[1])
+        num notas[notas_total]
+        num pesos[notas_total]
+        
+        num soma_produtos = 0
+        num soma_pesos = 0
 
-        print("A media é: ", notas[3])
+        num count = 0
+        while(count < notas_total) {
+            print("Insira a nota ", count + 1, ": ")
+            stdin('%i', notas[count])
+            
+            print("Insira o peso da nota ", count + 1, ": ")
+            stdin('%i', pesos[count])
+            
+            count = count + 1
+        }
+
+        count = 0
+
+        while(count < notas_total) {
+            soma_produtos = soma_produtos + (notas[count] * pesos[count])
+            soma_pesos = soma_pesos + pesos[count]
+            count = count + 1
+        }
+        
+        if (soma_pesos != 0) {
+            media_final = soma_produtos / soma_pesos
+            print("A media ponderada é: ", media_final)
+        } else {
+            print("Erro: A soma dos pesos é zero")
+        }
+
+    }else {
+        print("Opcao invalida. Por favor, selecione 1 ou 2")
     }
 
+    print("------------------------------------------")
     print("Finalizar programa? ")
     print("0 - Sim")
     print("1 - Nao")
-    stdin("%i", loop)
+    stdin('%i', loop)
+    print("------------------------------------------")
 }
+
+print("Programa finalizado. Ate mais!")

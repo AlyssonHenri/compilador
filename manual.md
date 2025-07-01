@@ -158,3 +158,19 @@ WHILE (condicao) {
     // Bloco repetido
 }
 ```
+
+A instrução `FOR` repete um bloco de código enquanto a condição for verdadeira
+
+**Sintaxe:**
+```plaintext
+FOR (declaração ; condição ; atribuição) {
+    // Bloco repetido
+}
+```
+
+**Exemplo:**
+```plaintext
+FOR (NUM a = 0 ; a < 10 ; a = a+1) {
+    PRINT(a)
+}
+```

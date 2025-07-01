@@ -1,14 +1,3 @@
-num notas[3]
-num pesos[3]
-
-pesos[0] = 2
-pesos[1] = 3
-
-print("insira a primeira nota: ")
-stdin('%i', notas[0])
-
-print("insira a segunda nota: ")
-stdin('%i', notas[1])
-
-
-print((notas[0] * pesos[0]) + (notas[1] * pesos[1]) / (pesos[0] + pesos[1]))
+for(num a = 0 ; a < 10 ; a = a+1) {
+    print(a)
+}

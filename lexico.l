@@ -10,6 +10,7 @@ STDIN "STDIN"
 IF "IF"
 ELSE "ELSE"
 WHILE "WHILE"
+FOR "FOR"
 
 TIPO "NUM"|"STR"
 VAR [A-Za-z_][A-Za-z0-9_]*
@@ -25,6 +26,7 @@ MASCARA '%[is]'
 {IF}         { return IF; }
 {ELSE}       { return ELSE; }
 {WHILE}      { return WHILE; }
+{FOR}        { return FOR; }
 
 "<="         { return ME; }
 ">="         { return MA; }
